@@ -1,0 +1,57 @@
+[2026-05-04 00:24:09] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 119, in main
+    app = SollieGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 63, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 276, in setup_ui
+    self.add_message("Sollie", "Hello! I'm Sollie, your AI assistant. I'm here to help you with tasks on your PC. What can I do for you today?", "assistant")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 315, in add_message
+    self.chat_display.tag_config("bold", font=FONTS["body_bold"], foreground=COLORS["text"])
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\ctk_textbox.py", line 442, in tag_config
+    raise AttributeError("'font' option forbidden, because would be incompatible with scaling")
+AttributeError: 'font' option forbidden, because would be incompatible with scaling
+
+[2026-05-04 00:24:15] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 119, in main
+    app = SollieGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 63, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 276, in setup_ui
+    self.add_message("Sollie", "Hello! I'm Sollie, your AI assistant. I'm here to help you with tasks on your PC. What can I do for you today?", "assistant")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 315, in add_message
+    self.chat_display.tag_config("bold", font=FONTS["body_bold"], foreground=COLORS["text"])
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\ctk_textbox.py", line 442, in tag_config
+    raise AttributeError("'font' option forbidden, because would be incompatible with scaling")
+AttributeError: 'font' option forbidden, because would be incompatible with scaling
+
+[2026-05-04 00:24:19] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 119, in main
+    app = SollieGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 63, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 276, in setup_ui
+    self.add_message("Sollie", "Hello! I'm Sollie, your AI assistant. I'm here to help you with tasks on your PC. What can I do for you today?", "assistant")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 315, in add_message
+    self.chat_display.tag_config("bold", font=FONTS["body_bold"], foreground=COLORS["text"])
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\ctk_textbox.py", line 442, in tag_config
+    raise AttributeError("'font' option forbidden, because would be incompatible with scaling")
+AttributeError: 'font' option forbidden, because would be incompatible with scaling
+

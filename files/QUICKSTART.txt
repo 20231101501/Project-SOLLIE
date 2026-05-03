@@ -106,7 +106,7 @@ Method A - Desktop Shortcut:
 
 Method B - Command Line:
   → Open Command Prompt in Sollie folder
-  → Run: python sollie_gui.py
+   → Run: python sollie_launcher.py
 
 You should see Sollie's chat window appear!
 

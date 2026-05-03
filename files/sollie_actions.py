@@ -7,6 +7,8 @@ import os
 import subprocess
 import psutil
 import json
+import sys
+import random
 from pathlib import Path
 import webbrowser
 
@@ -15,6 +17,41 @@ class SollieActions:
     def __init__(self, config_path="config.json"):
         self.config = self.load_config(config_path)
         self.user_home = Path.home()
+        self.allowed_app_entries = list(self.config['safety']['allowed_applications'])
+        self.allowed_apps = {Path(app).name.lower() for app in self.allowed_app_entries}
+        self.allowed_dirs = {
+            dir_name.lower() for dir_name in self.config['safety']['allowed_directories']
+        }
+        self.allowed_root_paths = [
+            Path(path).expanduser().resolve(strict=False)
+            for path in self.config['safety'].get('allowed_root_paths', [])
+        ]
+        default_extensions = {
+            ".txt",
+            ".md",
+            ".pdf",
+            ".docx",
+            ".xlsx",
+            ".pptx",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp",
+            ".bmp",
+            ".mp4",
+            ".mkv",
+            ".mov",
+            ".avi",
+            ".mp3",
+            ".wav",
+            ".flac",
+        }
+        configured_extensions = self.config['safety'].get('allowed_file_extensions')
+        if configured_extensions:
+            self.allowed_file_extensions = {ext.lower() for ext in configured_extensions}
+        else:
+            self.allowed_file_extensions = default_extensions
     
     def load_config(self, config_path):
         """Load configuration from JSON file"""
@@ -26,47 +63,201 @@ class SollieActions:
         blocked = self.config['safety']['blocked_actions']
         return action_type.lower() not in blocked
     
+    def _normalize_app_name(self, app_name):
+        return Path(app_name).name.lower()
+
+    def _app_search_roots(self):
+        if os.name != "nt":
+            return []
+
+        roots = []
+        local_appdata = os.environ.get("LOCALAPPDATA", "")
+        program_files = os.environ.get("PROGRAMFILES", "")
+        program_files_x86 = os.environ.get("PROGRAMFILES(X86)", "")
+        appdata = os.environ.get("APPDATA", "")
+        program_data = os.environ.get("PROGRAMDATA", "")
+
+        if local_appdata:
+            roots.append(Path(local_appdata) / "Programs")
+        if program_files:
+            roots.append(Path(program_files))
+        if program_files_x86:
+            roots.append(Path(program_files_x86))
+
+        if program_data:
+            roots.append(Path(program_data) / "Microsoft" / "Windows" / "Start Menu" / "Programs")
+        if appdata:
+            roots.append(Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs")
+
+        return [root for root in roots if root.exists()]
+
+    def _find_app_in_tree(self, root, candidate_names, max_depth=3):
+        root = Path(root)
+        for base, dirs, files in os.walk(root):
+            base_path = Path(base)
+            try:
+                relative = base_path.relative_to(root)
+            except ValueError:
+                continue
+
+            if len(relative.parts) > max_depth:
+                dirs[:] = []
+                continue
+
+            for file_name in files:
+                if file_name.lower() in candidate_names:
+                    return base_path / file_name
+
+        return None
+
+    def _resolve_app_path(self, app_name):
+        app_path = Path(app_name)
+        if app_path.is_file():
+            return app_path
+
+        normalized = self._normalize_app_name(app_name)
+        base = Path(normalized).stem
+        candidate_names = {normalized, f"{base}.exe", f"{base}.lnk"}
+
+        # Check configured allowed entries for full paths
+        for entry in self.allowed_app_entries:
+            entry_path = Path(entry)
+            if entry_path.is_file() and entry_path.name.lower() in candidate_names:
+                return entry_path
+
+        # Search common install locations
+        for root in self._app_search_roots():
+            found = self._find_app_in_tree(root, candidate_names)
+            if found:
+                return found
+
+        return None
+
+    def _resolve_path(self, path_str):
+        path = Path(path_str).expanduser()
+
+        if not path.is_absolute():
+            parts = path.parts
+            if parts and parts[0].lower() in self.allowed_dirs:
+                path = self.user_home / path
+            else:
+                path = self.user_home / "Desktop" / path
+
+        return path.resolve(strict=False)
+
+    def _find_directory_in_tree(self, root, target_name, max_depth=3):
+        root = Path(root)
+        target_lower = target_name.lower()
+
+        for base, dirs, _ in os.walk(root):
+            base_path = Path(base)
+            try:
+                relative = base_path.relative_to(root)
+            except ValueError:
+                continue
+
+            if len(relative.parts) > max_depth:
+                dirs[:] = []
+                continue
+
+            for dir_name in dirs:
+                if dir_name.lower() == target_lower:
+                    return base_path / dir_name
+
+        return None
+
+    def resolve_directory_query(self, directory):
+        path = Path(directory).expanduser()
+        if path.is_absolute():
+            return path.resolve(strict=False)
+
+        if len(path.parts) > 1:
+            return self._resolve_path(directory)
+
+        for dir_name in self.config['safety']['allowed_directories']:
+            if dir_name.lower() == str(path).lower():
+                return (self.user_home / dir_name).resolve(strict=False)
+
+        for root in self._get_allowed_roots():
+            found = self._find_directory_in_tree(root, str(path))
+            if found:
+                return found.resolve(strict=False)
+
+        return self._resolve_path(directory)
+
+    def _is_under_root(self, path, root):
+        try:
+            path.relative_to(root)
+            return True
+        except ValueError:
+            return False
+
+    def _get_allowed_roots(self, directory=None):
+        if directory:
+            path = self._resolve_path(directory)
+            if self.is_directory_safe(path) and path.exists() and path.is_dir():
+                return [path]
+            return []
+
+        roots = []
+        for dir_name in self.config['safety']['allowed_directories']:
+            candidate = (self.user_home / dir_name).resolve(strict=False)
+            if candidate.exists() and candidate.is_dir():
+                roots.append(candidate)
+
+        for root in self.allowed_root_paths:
+            if root.exists() and root.is_dir():
+                roots.append(root)
+
+        return roots
+
+    def is_file_extension_allowed(self, path):
+        if not self.allowed_file_extensions:
+            return False
+        return path.suffix.lower() in self.allowed_file_extensions
+
     def is_app_allowed(self, app_name):
         """Check if an application is whitelisted"""
-        allowed = self.config['safety']['allowed_applications']
-        app_name_lower = app_name.lower()
-        
-        # Check if app is in whitelist (case-insensitive)
-        return any(allowed_app.lower() in app_name_lower or app_name_lower in allowed_app.lower() 
-                   for allowed_app in allowed)
+        return self._normalize_app_name(app_name) in self.allowed_apps
     
     def is_directory_safe(self, directory):
         """Check if directory is in allowed list"""
-        allowed_dirs = self.config['safety']['allowed_directories']
-        dir_path = Path(directory)
+        dir_path = Path(directory).expanduser().resolve(strict=False)
         
         # Check if it's in user's home directory and in allowed subdirectories
         try:
             relative = dir_path.relative_to(self.user_home)
-            first_part = str(relative).split(os.sep)[0]
-            return first_part in allowed_dirs
+            first_part = relative.parts[0] if relative.parts else ""
+            return first_part.lower() in self.allowed_dirs
         except ValueError:
-            return False
+            pass
+
+        for root in self.allowed_root_paths:
+            if self._is_under_root(dir_path, root):
+                return True
+
+        return False
     
     # ===== FILE OPERATIONS =====
     
     def create_file(self, filepath, content=""):
         """Create a new file with optional content"""
         try:
-            path = Path(filepath)
+            path = self._resolve_path(filepath)
             
             if not self.is_directory_safe(path.parent):
                 return {"success": False, "error": "Directory not in safe list"}
             
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
-            return {"success": True, "message": f"File created: {filepath}"}
+            return {"success": True, "message": f"File created: {path}"}
         except Exception as e:
             return {"success": False, "error": str(e)}
     
     def read_file(self, filepath):
         """Read file contents"""
         try:
-            path = Path(filepath)
+            path = self._resolve_path(filepath)
             
             if not self.is_directory_safe(path.parent):
                 return {"success": False, "error": "Directory not in safe list"}
@@ -79,13 +270,107 @@ class SollieActions:
     def list_directory(self, directory):
         """List files in a directory"""
         try:
-            path = Path(directory)
+            path = self._resolve_path(directory)
             
             if not self.is_directory_safe(path):
                 return {"success": False, "error": "Directory not in safe list"}
+
+            if not path.exists() or not path.is_dir():
+                return {"success": False, "error": "Directory does not exist"}
             
             files = [f.name for f in path.iterdir()]
             return {"success": True, "files": files}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def open_file(self, filepath):
+        """Open a file with the default application"""
+        try:
+            path = self._resolve_path(filepath)
+
+            if not self.is_directory_safe(path.parent):
+                return {"success": False, "error": "Directory not in safe list"}
+
+            if not path.exists() or not path.is_file():
+                return {"success": False, "error": "File does not exist"}
+
+            if not self.is_file_extension_allowed(path):
+                return {"success": False, "error": "File type not allowed"}
+
+            if os.name == 'nt':
+                os.startfile(str(path))
+            elif sys.platform == 'darwin':
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+
+            return {"success": True, "message": f"Opened file: {path.name}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def open_directory(self, directory):
+        """Open a directory in the default file explorer"""
+        try:
+            path = self.resolve_directory_query(directory)
+
+            if not path.exists() or not path.is_dir():
+                return {"success": False, "error": "Directory does not exist"}
+
+            if not self.is_directory_safe(path):
+                return {"success": False, "error": "Directory not in safe list"}
+
+            if os.name == 'nt':
+                os.startfile(str(path))
+            elif sys.platform == 'darwin':
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+
+            return {"success": True, "message": f"Opened folder: {path.name}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def open_random_file(self, file_extensions=None, directory=None):
+        """Open a random file from allowed directories"""
+        try:
+            roots = self._get_allowed_roots(directory)
+            if not roots:
+                return {"success": False, "error": "No safe directories available"}
+
+            if file_extensions:
+                exts = {
+                    ext.lower() if ext.startswith(".") else f".{ext.lower()}"
+                    for ext in file_extensions
+                }
+            else:
+                exts = set(self.allowed_file_extensions)
+
+            if not exts:
+                return {"success": False, "error": "No allowed file types configured"}
+
+            selected = None
+            seen = 0
+
+            for root in roots:
+                for base, _, files in os.walk(root):
+                    base_path = Path(base)
+                    if not self.is_directory_safe(base_path):
+                        continue
+
+                    for file_name in files:
+                        path = base_path / file_name
+                        if path.suffix.lower() in exts:
+                            seen += 1
+                            if random.randint(1, seen) == 1:
+                                selected = path
+
+            if not selected:
+                return {"success": False, "error": "No matching files found"}
+
+            result = self.open_file(str(selected))
+            if result.get("success"):
+                result["message"] = f"Opened random file: {selected.name}"
+            return result
         except Exception as e:
             return {"success": False, "error": str(e)}
     
@@ -96,14 +381,20 @@ class SollieActions:
         try:
             if not self.is_app_allowed(app_name):
                 return {"success": False, "error": f"{app_name} is not in the allowed applications list"}
-            
-            # Try to launch the application
-            if os.name == 'nt':  # Windows
-                subprocess.Popen(app_name, shell=True)
+
+            resolved = self._resolve_app_path(app_name)
+            if not resolved:
+                return {
+                    "success": False,
+                    "error": "Application not found. Add the full path to allowed_applications in config.json."
+                }
+
+            if resolved.suffix.lower() == ".lnk":
+                os.startfile(str(resolved))
             else:
-                subprocess.Popen([app_name])
-            
-            return {"success": True, "message": f"Opened {app_name}"}
+                subprocess.Popen([str(resolved)])
+
+            return {"success": True, "message": f"Opened {resolved.stem}"}
         except Exception as e:
             return {"success": False, "error": str(e)}
     
@@ -113,10 +404,12 @@ class SollieActions:
             if not self.is_app_allowed(app_name):
                 return {"success": False, "error": f"{app_name} is not in the allowed applications list"}
             
+            target_name = self._normalize_app_name(app_name)
             # Find and terminate the process
             killed = False
             for proc in psutil.process_iter(['name']):
-                if app_name.lower() in proc.info['name'].lower():
+                proc_name = (proc.info.get('name') or "").lower()
+                if proc_name == target_name:
                     proc.terminate()
                     killed = True
             
