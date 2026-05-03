@@ -102,6 +102,53 @@ def test_sollie_modules():
     return True
 
 
+def test_intent_parsing():
+    """Test intent parsing for common commands"""
+    print_section("Testing Intent Parsing")
+
+    try:
+        from sollie_core import SollieBrain
+
+        brain = SollieBrain()
+        action = brain.detect_action_intent("Create a file called todo.txt", "")
+
+        if not action or action.get('type') != "create_file":
+            print("✗ Could not detect create_file intent")
+            return False
+
+        filename = Path(action.get('params', {}).get('filepath', '')).name
+        if filename != "todo.txt":
+            print(f"✗ Unexpected filename parsed: {filename}")
+            return False
+
+        app_action = brain.detect_action_intent("Please open note pad", "")
+        if not app_action or app_action.get('type') != "open_application":
+            print("✗ Could not detect open_application intent for spaced app name")
+            return False
+
+        file_action = brain.detect_action_intent("Open holiday.mp4", "")
+        if not file_action or file_action.get('type') != "open_file":
+            print("✗ Could not detect open_file intent for media file")
+            return False
+
+        random_action = brain.detect_action_intent("Open a random jpg", "")
+        if not random_action or random_action.get('type') != "open_random_file":
+            print("✗ Could not detect open_random_file intent for random image")
+            return False
+
+        folder_action = brain.detect_action_intent("Open pictures folder", "")
+        if not folder_action or folder_action.get('type') != "open_directory":
+            print("✗ Could not detect open_directory intent for folder")
+            return False
+
+        print("✓ Intent parsing works for file creation, app launch, and file open")
+        return True
+
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return False
+
+
 def test_lm_studio():
     """Test LM Studio connection"""
     print_section("Testing LM Studio Connection")
@@ -245,6 +292,7 @@ def main():
         ("Imports", test_imports),
         ("Configuration", test_config),
         ("Sollie Modules", test_sollie_modules),
+        ("Intent Parsing", test_intent_parsing),
         ("Memory System", test_memory),
         ("Action System", test_actions),
         ("LM Studio Connection", test_lm_studio),

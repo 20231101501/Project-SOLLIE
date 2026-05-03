@@ -1,6 +1,9 @@
 {
   "lm_studio": {
     "api_url": "http://localhost:1234/v1",
+    "app_path": "",
+    "auto_start": true,
+    "startup_timeout_sec": 45,
     "model": "local-model",
     "temperature": 0.7,
     "max_tokens": 500
@@ -10,6 +13,26 @@
     "personality": "You are Sollie, a helpful and friendly AI assistant with a professional yet warm personality. You're proactive, intelligent, and focused on helping your user accomplish tasks efficiently. You speak naturally and concisely. You always confirm before taking any actions that affect the user's system. You have a bit of charm and wit, similar to JARVIS, but you're your own unique assistant.",
     "approval_required": true,
     "logging_enabled": true
+  },
+  "agent": {
+    "enabled": true,
+    "max_steps": 5
+  },
+  "monitoring": {
+    "enabled": true,
+    "interval_sec": 30,
+    "cpu_percent": 85,
+    "memory_percent": 85,
+    "disk_percent": 90,
+    "quiet_hours": {
+      "start": "23:00",
+      "end": "07:00"
+    }
+  },
+  "proactive_suggestions": {
+    "enabled": true,
+    "cooldown_sec": 600,
+    "auto_queue_actions": true
   },
   "safety": {
     "allowed_applications": [
@@ -30,6 +53,32 @@
       "Pictures",
       "Videos",
       "Music"
+    ],
+    "allowed_root_paths": [
+      "C:\\Games",
+      "C:\\Riot Games",
+      "C:\\Program Files (x86)\\Steam"
+    ],
+    "allowed_file_extensions": [
+      ".txt",
+      ".md",
+      ".pdf",
+      ".docx",
+      ".xlsx",
+      ".pptx",
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".gif",
+      ".webp",
+      ".bmp",
+      ".mp4",
+      ".mkv",
+      ".mov",
+      ".avi",
+      ".mp3",
+      ".wav",
+      ".flac"
     ],
     "blocked_actions": [
       "shutdown",

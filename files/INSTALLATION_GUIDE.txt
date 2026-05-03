@@ -92,7 +92,7 @@ STEP 2: Setup LM Studio
   → Start Local Server (keep it running)
 
 STEP 3: Launch Sollie
-  → Type: python sollie_gui.py
+  → Type: python sollie_launcher.py
   → Start chatting!
 
 📄 See QUICKSTART.txt for detailed steps

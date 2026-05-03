@@ -6,7 +6,18 @@ Automates installation and initial configuration
 import subprocess
 import sys
 import os
+import time
+import traceback
 from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+LOG_PATH = BASE_DIR / "setup.log"
+
+
+def log_message(message):
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    with LOG_PATH.open("a", encoding="utf-8", errors="ignore") as log_file:
+        log_file.write(f"[{timestamp}] {message}\n")
 
 
 def print_header(text):
@@ -85,10 +96,20 @@ def create_desktop_shortcut():
         
         shell = win32com.client.Dispatch("WScript.Shell")
         shortcut = shell.CreateShortCut(str(shortcut_path))
-        shortcut.Targetpath = sys.executable
-        shortcut.Arguments = f'"{Path.cwd() / "sollie_gui.py"}"'
+
+        python_path = Path(sys.executable)
+        vbs_path = create_vbs_launcher(python_path, Path.cwd() / "sollie_launcher.py")
+        wscript_path = Path(os.environ.get("WINDIR", "C:\\Windows")) / "System32" / "wscript.exe"
+
+        shortcut.Targetpath = str(wscript_path)
+        shortcut.Arguments = str(vbs_path)
         shortcut.WorkingDirectory = str(Path.cwd())
-        shortcut.IconLocation = sys.executable
+
+        icon_path = Path.cwd() / "assets" / "sollie.ico"
+        if icon_path.exists():
+            shortcut.IconLocation = str(icon_path)
+        else:
+            shortcut.IconLocation = sys.executable
         shortcut.save()
         
         print(f"✓ Desktop shortcut created: {shortcut_path}")
@@ -118,8 +139,33 @@ def check_lm_studio():
         return False
 
 
+def create_vbs_launcher(python_path, script_path):
+    """Create a hidden VBS launcher to avoid console windows"""
+    pythonw_path = python_path.with_name("pythonw.exe")
+    launcher_path = pythonw_path if pythonw_path.exists() else python_path
+
+    vbs_path = Path.cwd() / "sollie_launcher.vbs"
+    def escape(path_value):
+        return str(path_value).replace("\\", "\\\\")
+
+    cwd = escape(Path.cwd())
+    launcher = escape(launcher_path)
+    script = escape(script_path)
+
+    vbs_content = (
+        "Set shell = CreateObject(\"WScript.Shell\")\n"
+        f"shell.CurrentDirectory = \"{cwd}\"\n"
+        "shell.Run Chr(34) & \"" + launcher + "\" & Chr(34) & _\n"
+        "\" \" & Chr(34) & \"" + script + "\" & Chr(34), 0, False\n"
+    )
+
+    vbs_path.write_text(vbs_content, encoding="utf-8")
+    return vbs_path
+
+
 def main():
     """Main setup function"""
+    os.chdir(BASE_DIR)
     print("\n" + "🤖 "*20)
     print("       SOLLIE - AI ASSISTANT SETUP")
     print("🤖 "*20 + "\n")
@@ -150,7 +196,7 @@ def main():
 ║  1. Make sure LM Studio is running with local server ON   ║
 ║                                                            ║
 ║  2. Run Sollie with:                                       ║
-║     → python sollie_gui.py                                 ║
+║     → python sollie_launcher.py                            ║
 ║                                                            ║
 ║  3. Or use the desktop shortcut (if created)              ║
 ║                                                            ║
@@ -163,9 +209,17 @@ def main():
 
 
 if __name__ == "__main__":
-    success = main()
-    
+    try:
+        success = main()
+    except Exception:
+        success = False
+        error_text = traceback.format_exc()
+        log_message(error_text)
+        print("Setup failed. Details were saved to setup.log")
+        print(error_text)
+
+    if os.name == "nt" and os.environ.get("SOLLIE_NO_PAUSE") != "1":
+        input("\nPress Enter to exit...")
+
     if not success:
         sys.exit(1)
-    
-    input("\nPress Enter to exit...")

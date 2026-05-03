@@ -91,7 +91,7 @@ sollie/
 
 **Option B: Command Line**
 ```bash
-python sollie_gui.py
+python sollie_launcher.py
 ```
 
 ---
@@ -107,6 +107,19 @@ Sollie: I'm doing great! Ready to help you with whatever you need.
 
 You: What can you do?
 Sollie: I can help you with...
+```
+
+### Agentic Task Mode
+Use task mode to plan and execute multi-step goals (with approvals on each action).
+
+```
+You: /task Clean up my Downloads and open the newest PDF
+```
+
+To stop a task at any time:
+
+```
+You: /stop
 ```
 
 ### PC Control Examples
@@ -135,6 +148,12 @@ You: Show system information
 ```
 You: Open YouTube
 You: Go to reddit.com
+```
+
+**Opening Files:**
+```
+You: Open photo.jpg
+You: Open video.mp4
 ```
 
 ### 🔒 Safety Features
@@ -171,6 +190,7 @@ Sollie: I can open Chrome for you.
   "your-app.exe"  // Add your app here
 ]
 ```
+Tip: You can use full paths here if an app is not on your PATH.
 
 #### Adjust AI Personality
 ```json
@@ -180,6 +200,34 @@ Sollie: I can open Chrome for you.
 #### Disable Approval (Advanced Users Only!)
 ```json
 "approval_required": false  // ⚠ Use with caution!
+```
+
+#### Auto-start LM Studio (Windows)
+```json
+"app_path": "C:\\Program Files\\LM Studio\\LM Studio.exe",
+"auto_start": true,
+"startup_timeout_sec": 45
+```
+
+#### Agentic Tasks & Monitoring
+```json
+"agent": {
+   "enabled": true,
+   "max_steps": 5
+},
+"monitoring": {
+   "enabled": true,
+   "interval_sec": 30,
+   "cpu_percent": 85,
+   "memory_percent": 85,
+   "disk_percent": 90,
+   "quiet_hours": { "start": "23:00", "end": "07:00" }
+},
+"proactive_suggestions": {
+   "enabled": true,
+   "cooldown_sec": 600,
+   "auto_queue_actions": true
+}
 ```
 
 ---
@@ -270,7 +318,7 @@ Every action is logged in `sollie_memory.db`
 
 1. **No voice commands yet** (coming soon!)
 2. **Context window limited** (~10 messages)
-3. **No internet browsing** (only local PC control)
+3. **No built-in web browsing** (only opens URLs in your browser)
 4. **Windows only** (Mac/Linux coming later)
 5. **Model must be downloaded manually**
 
