@@ -1,0 +1,186 @@
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║            🤖 SOLLIE - QUICK START GUIDE 🤖                    ║
+║                                                                ║
+║          Get Sollie running in 10 minutes or less!            ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+
+
+📋 CHECKLIST - Do these in order:
+
+  ☐ 1. Extract Sollie folder to your PC
+  ☐ 2. Install dependencies
+  ☐ 3. Setup LM Studio
+  ☐ 4. Test everything
+  ☐ 5. Launch Sollie!
+
+
+═══════════════════════════════════════════════════════════════
+
+STEP 1: EXTRACT FILES
+══════════════════════
+
+1. Put the Sollie folder somewhere easy like:
+   C:\Users\YourName\Sollie
+
+2. You should see these files:
+   • sollie_gui.py
+   • sollie_core.py
+   • config.json
+   • setup.py
+   • README.md
+
+
+═══════════════════════════════════════════════════════════════
+
+STEP 2: INSTALL DEPENDENCIES
+═════════════════════════════
+
+1. Open Command Prompt in the Sollie folder:
+   → Hold Shift + Right-click in folder
+   → Click "Open PowerShell window here"
+
+2. Run this command:
+   
+   python setup.py
+
+3. Wait 2-5 minutes for installation
+
+4. If you see "✓ SETUP COMPLETE!" → proceed to Step 3
+
+
+═══════════════════════════════════════════════════════════════
+
+STEP 3: SETUP LM STUDIO (THE AI BRAIN)
+═══════════════════════════════════════
+
+1. Download LM Studio:
+   → Go to: https://lmstudio.ai/
+   → Download Windows version
+   → Install it
+
+2. Download an AI model:
+   → Open LM Studio
+   → Click "Discover" tab (left side)
+   → Search: "Llama-3.1-8B-Instruct"
+   → Click the download button
+   → Wait 10-20 minutes (it's ~5GB)
+
+3. Start the Local Server:
+   → Click "Local Server" tab (left side)
+   → Select your downloaded model from dropdown
+   → Click "Start Server" button
+   → You should see: "Server running on http://localhost:1234"
+   → KEEP LM STUDIO RUNNING!
+
+
+═══════════════════════════════════════════════════════════════
+
+STEP 4: TEST EVERYTHING
+════════════════════════
+
+1. In Command Prompt (in Sollie folder), run:
+   
+   python test_sollie.py
+
+2. Check the results:
+   ✓ All tests PASS? → You're ready!
+   ✗ Some tests FAIL? → Check what failed and fix it
+
+Common issues:
+  • "Cannot connect to LM Studio"
+    → Make sure LM Studio's server is running
+  
+  • "Module not found"
+    → Run: python setup.py again
+
+
+═══════════════════════════════════════════════════════════════
+
+STEP 5: LAUNCH SOLLIE! 🚀
+═══════════════════════
+
+Method A - Desktop Shortcut:
+  → Double-click "Sollie" icon on desktop
+
+Method B - Command Line:
+  → Open Command Prompt in Sollie folder
+  → Run: python sollie_gui.py
+
+You should see Sollie's chat window appear!
+
+
+═══════════════════════════════════════════════════════════════
+
+FIRST CONVERSATION
+═══════════════════
+
+Try these commands to test Sollie:
+
+1. "Hey Sollie, introduce yourself"
+   → Tests basic chat
+
+2. "What can you do?"
+   → Shows Sollie's capabilities
+
+3. "Open Notepad"
+   → Tests PC control (will ask for approval)
+
+4. "What's my system status?"
+   → Shows CPU, RAM, disk usage
+
+
+═══════════════════════════════════════════════════════════════
+
+⚠️ IMPORTANT SAFETY NOTES
+═══════════════════════════
+
+• Sollie will ALWAYS ask before doing anything
+• You must click "Approve" for actions to execute
+• Review the action description before approving
+• All actions are logged (check Settings → View Action Log)
+
+
+═══════════════════════════════════════════════════════════════
+
+🛠️ TROUBLESHOOTING
+══════════════════
+
+Problem: "Sollie is not responding"
+Solution: Check if LM Studio server is running
+
+Problem: "GUI won't open"
+Solution: Run setup.py again, then restart
+
+Problem: "Error connecting to localhost:1234"
+Solution: 
+  1. Open LM Studio
+  2. Go to Local Server tab
+  3. Make sure server is started
+
+Problem: "Sollie is too slow"
+Solution: Use a smaller model (7B instead of 13B)
+
+
+═══════════════════════════════════════════════════════════════
+
+📚 NEED MORE HELP?
+══════════════════
+
+• Read README.md for detailed documentation
+• Check config.json to customize settings
+• Review action logs in the GUI
+
+
+═══════════════════════════════════════════════════════════════
+
+🎉 THAT'S IT!
+═════════════
+
+You now have your own private AI assistant!
+
+Enjoy chatting with Sollie! 🤖
+
+
+═══════════════════════════════════════════════════════════════

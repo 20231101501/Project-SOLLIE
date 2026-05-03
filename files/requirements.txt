@@ -1,0 +1,18 @@
+# Sollie AI Assistant - Python Dependencies
+
+# API and HTTP requests
+requests>=2.31.0
+
+# GUI Framework
+customtkinter>=5.2.0
+
+# Windows automation
+pyautogui>=0.9.54
+psutil>=5.9.0
+pywin32>=306
+
+# Database
+# SQLite comes with Python, no need to install
+
+# Additional utilities
+python-dotenv>=1.0.0

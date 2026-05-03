@@ -1,0 +1,47 @@
+{
+  "lm_studio": {
+    "api_url": "http://localhost:1234/v1",
+    "model": "local-model",
+    "temperature": 0.7,
+    "max_tokens": 500
+  },
+  "sollie": {
+    "name": "Sollie",
+    "personality": "You are Sollie, a helpful and friendly AI assistant with a professional yet warm personality. You're proactive, intelligent, and focused on helping your user accomplish tasks efficiently. You speak naturally and concisely. You always confirm before taking any actions that affect the user's system. You have a bit of charm and wit, similar to JARVIS, but you're your own unique assistant.",
+    "approval_required": true,
+    "logging_enabled": true
+  },
+  "safety": {
+    "allowed_applications": [
+      "chrome.exe",
+      "firefox.exe",
+      "notepad.exe",
+      "code.exe",
+      "explorer.exe",
+      "calculator.exe",
+      "spotify.exe",
+      "discord.exe",
+      "steam.exe"
+    ],
+    "allowed_directories": [
+      "Desktop",
+      "Documents",
+      "Downloads",
+      "Pictures",
+      "Videos",
+      "Music"
+    ],
+    "blocked_actions": [
+      "shutdown",
+      "restart",
+      "delete_system",
+      "registry_edit",
+      "format",
+      "admin_command"
+    ]
+  },
+  "memory": {
+    "database_path": "sollie_memory.db",
+    "max_conversation_history": 50
+  }
+}
