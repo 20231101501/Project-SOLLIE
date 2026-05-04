@@ -101,7 +101,7 @@
     ]
   },
   "memory": {
-    "storage_path": "sollie_memory.json",
+    "storage_path": "memory.json",
     "max_conversation_history": 50,
     "user_memory_limit": 50,
     "rag_enabled": true,

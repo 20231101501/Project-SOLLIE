@@ -9,31 +9,40 @@ import queue
 import os
 import time
 import re
+import json
+import tkinter as tk
+from tkinter import filedialog
 from datetime import datetime
 import psutil
 from sollie_core import SollieBrain
 
 COLORS = {
-    "bg": "#0f1418",
-    "panel": "#141b21",
-    "panel_alt": "#1c252c",
-    "outline": "#2b3842",
-    "text": "#ecf1f5",
-    "muted": "#9aa7b2",
-    "accent": "#4dd0a6",
-    "accent_hover": "#3fb98f",
-    "warning": "#f4b24d",
-    "danger": "#e26d5a",
-    "info": "#6aa9ff"
+    "bg": "#0b0f14",
+    "panel": "#111821",
+    "panel_alt": "#151f2a",
+    "panel_glow": "#1b2733",
+    "outline": "#2a3947",
+    "outline_bright": "#35566b",
+    "text": "#e7f5ff",
+    "muted": "#8ea3b5",
+    "accent": "#00f5ff",
+    "accent_hover": "#00d7e6",
+    "accent_alt": "#ff2bd6",
+    "accent_alt_hover": "#e820bf",
+    "warning": "#f5d14a",
+    "danger": "#ff5c70",
+    "info": "#7aa2ff",
+    "success": "#4dff9a"
 }
 
 FONTS = {
     "title": ("Bahnschrift", 26, "bold"),
-    "subtitle": ("Candara", 13),
-    "section": ("Candara", 12, "bold"),
-    "body": ("Candara", 12),
-    "body_bold": ("Candara", 12, "bold"),
-    "body_italic": ("Candara", 12, "italic"),
+    "subtitle": ("Bahnschrift", 12),
+    "section": ("Bahnschrift", 12, "bold"),
+    "body": ("Segoe UI", 12),
+    "body_bold": ("Segoe UI", 12, "bold"),
+    "body_italic": ("Segoe UI", 12, "italic"),
+    "caption": ("Segoe UI", 10),
     "code": ("Cascadia Mono", 11)
 }
 
@@ -45,10 +54,22 @@ class SollieGUI:
         self.pending_action = None
         self.pending_actions = []
         self.last_suggestion_time = 0
+        self.last_assistant_message = ""
+        self.connection_status = "UNKNOWN"
+        self.config_path = os.path.join(os.path.dirname(__file__), "config.json")
+
+        agent_config = self.brain.config.get("agent", {})
+        monitoring_config = self.brain.config.get("monitoring", {})
+        suggestions_config = self.brain.config.get("proactive_suggestions", {})
+
+        self.task_enabled = bool(agent_config.get("enabled", True))
+        self.monitoring_enabled = bool(monitoring_config.get("enabled", False))
+        self.suggestions_enabled = bool(suggestions_config.get("enabled", False))
+        self.auto_queue_enabled = bool(suggestions_config.get("auto_queue_actions", False))
         
         # Setup window
         self.window = ctk.CTk()
-        self.window.title("Sollie - Your AI Assistant")
+        self.window.title("SOLLIE // Offline AI")
         self.window.geometry("980x720")
         self.window.minsize(980, 720)
         self.window.configure(fg_color=COLORS["bg"])
@@ -77,7 +98,9 @@ class SollieGUI:
             main_frame,
             width=230,
             fg_color=COLORS["panel"],
-            corner_radius=18
+            corner_radius=18,
+            border_width=1,
+            border_color=COLORS["outline"]
         )
         sidebar.grid(row=0, column=0, sticky="nsw", padx=(12, 6), pady=12)
 
@@ -85,27 +108,40 @@ class SollieGUI:
             sidebar,
             text="SOLLIE",
             font=FONTS["title"],
-            text_color=COLORS["text"]
+            text_color=COLORS["accent"]
         )
         brand.pack(padx=16, pady=(18, 4), anchor="w")
 
         tagline = ctk.CTkLabel(
             sidebar,
-            text="Local assistant",
+            text="Offline neural assistant",
             font=FONTS["subtitle"],
             text_color=COLORS["muted"]
         )
         tagline.pack(padx=16, pady=(0, 12), anchor="w")
 
-        status_frame = ctk.CTkFrame(sidebar, fg_color=COLORS["panel_alt"], corner_radius=12)
+        status_frame = ctk.CTkFrame(
+            sidebar,
+            fg_color=COLORS["panel_alt"],
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
         status_frame.pack(fill="x", padx=14, pady=(0, 12))
         self.status_label = ctk.CTkLabel(
             status_frame,
-            text="● Ready",
+            text="READY",
             font=FONTS["body_bold"],
-            text_color=COLORS["accent"]
+            text_color=COLORS["success"]
         )
-        self.status_label.pack(padx=12, pady=10, anchor="w")
+        self.status_label.pack(padx=12, pady=(10, 2), anchor="w")
+        self.connection_label = ctk.CTkLabel(
+            status_frame,
+            text="LM: UNKNOWN",
+            font=FONTS["caption"],
+            text_color=COLORS["muted"]
+        )
+        self.connection_label.pack(padx=12, pady=(0, 10), anchor="w")
 
         quick_label = ctk.CTkLabel(
             sidebar,
@@ -115,43 +151,150 @@ class SollieGUI:
         )
         quick_label.pack(padx=16, pady=(4, 6), anchor="w")
 
-        def quick_button(title, message):
+        def quick_button(title, message, alt=False):
             return ctk.CTkButton(
                 sidebar,
                 text=title,
                 command=lambda: self.send_quick_message(message),
-                fg_color=COLORS["accent"],
-                hover_color=COLORS["accent_hover"],
+                fg_color=COLORS["accent_alt"] if alt else COLORS["accent"],
+                hover_color=COLORS["accent_alt_hover"] if alt else COLORS["accent_hover"],
                 text_color=COLORS["bg"],
-                height=36
+                height=34
             )
 
         quick_button("List Desktop", "List my Desktop files").pack(padx=14, pady=4, fill="x")
-        quick_button("List Downloads", "List my Downloads folder").pack(padx=14, pady=4, fill="x")
-        quick_button("System Status", "What's my PC status?").pack(padx=14, pady=4, fill="x")
+        quick_button("Open Downloads", "Open Downloads folder", alt=True).pack(padx=14, pady=4, fill="x")
+        quick_button("Open Documents", "Open Documents folder").pack(padx=14, pady=4, fill="x")
+        quick_button("System Status", "What's my PC status?", alt=True).pack(padx=14, pady=4, fill="x")
 
-        task_label = ctk.CTkLabel(
+        pulse_frame = ctk.CTkFrame(
             sidebar,
-            text="Task Mode",
-            font=FONTS["section"],
-            text_color=COLORS["muted"]
+            fg_color=COLORS["panel_alt"],
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS["outline"]
         )
-        task_label.pack(padx=16, pady=(14, 4), anchor="w")
-        task_hint = ctk.CTkLabel(
+        pulse_frame.pack(fill="x", padx=14, pady=(12, 10))
+        pulse_label = ctk.CTkLabel(
+            pulse_frame,
+            text="System Pulse",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        )
+        pulse_label.pack(padx=12, pady=(10, 6), anchor="w")
+
+        def metric_row(parent, title, color):
+            row = ctk.CTkFrame(parent, fg_color=COLORS["panel_alt"], corner_radius=0)
+            row.pack(fill="x", padx=12, pady=(0, 8))
+            label = ctk.CTkLabel(
+                row,
+                text=f"{title}: 0%",
+                font=FONTS["caption"],
+                text_color=COLORS["text"]
+            )
+            label.pack(anchor="w")
+            bar = ctk.CTkProgressBar(
+                row,
+                height=8,
+                fg_color=COLORS["panel"],
+                progress_color=color
+            )
+            bar.pack(fill="x", pady=(4, 0))
+            bar.set(0)
+            return label, bar
+
+        self.cpu_label, self.cpu_bar = metric_row(pulse_frame, "CPU", COLORS["accent"])
+        self.mem_label, self.mem_bar = metric_row(pulse_frame, "Memory", COLORS["accent_alt"])
+        self.disk_label, self.disk_bar = metric_row(pulse_frame, "Disk", COLORS["info"])
+
+        deck_frame = ctk.CTkFrame(
             sidebar,
-            text="Use /task to plan\nmultistep actions",
-            font=FONTS["body"],
-            text_color=COLORS["text"],
+            fg_color=COLORS["panel_alt"],
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
+        deck_frame.pack(fill="x", padx=14, pady=(0, 10))
+        deck_label = ctk.CTkLabel(
+            deck_frame,
+            text="Control Deck",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        )
+        deck_label.pack(padx=12, pady=(10, 4), anchor="w")
+
+        self.task_var = tk.BooleanVar(value=self.task_enabled)
+        self.monitor_var = tk.BooleanVar(value=self.monitoring_enabled)
+        self.suggest_var = tk.BooleanVar(value=self.suggestions_enabled)
+        self.auto_queue_var = tk.BooleanVar(value=self.auto_queue_enabled)
+
+        switch_style = {
+            "fg_color": COLORS["outline"],
+            "progress_color": COLORS["accent"],
+            "button_color": COLORS["panel_glow"],
+            "button_hover_color": COLORS["accent_hover"],
+            "text_color": COLORS["text"]
+        }
+
+        ctk.CTkSwitch(
+            deck_frame,
+            text="Task Mode",
+            variable=self.task_var,
+            command=self.toggle_task_mode,
+            **switch_style
+        ).pack(padx=12, pady=4, anchor="w")
+        ctk.CTkSwitch(
+            deck_frame,
+            text="Monitoring",
+            variable=self.monitor_var,
+            command=self.toggle_monitoring,
+            **switch_style
+        ).pack(padx=12, pady=4, anchor="w")
+        ctk.CTkSwitch(
+            deck_frame,
+            text="Suggestions",
+            variable=self.suggest_var,
+            command=self.toggle_suggestions,
+            **switch_style
+        ).pack(padx=12, pady=4, anchor="w")
+        ctk.CTkSwitch(
+            deck_frame,
+            text="Auto-Queue",
+            variable=self.auto_queue_var,
+            command=self.toggle_auto_queue,
+            **switch_style
+        ).pack(padx=12, pady=(4, 10), anchor="w")
+
+        queue_frame = ctk.CTkFrame(
+            sidebar,
+            fg_color=COLORS["panel_alt"],
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
+        queue_frame.pack(fill="x", padx=14, pady=(0, 10))
+        queue_label = ctk.CTkLabel(
+            queue_frame,
+            text="Action Queue",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        )
+        queue_label.pack(padx=12, pady=(10, 4), anchor="w")
+        self.queue_status = ctk.CTkLabel(
+            queue_frame,
+            text="No pending actions.",
+            font=FONTS["caption"],
+            text_color=COLORS["muted"],
             justify="left"
         )
-        task_hint.pack(padx=16, pady=(0, 12), anchor="w")
+        self.queue_status.pack(padx=12, pady=(0, 10), anchor="w")
 
         spacer = ctk.CTkFrame(sidebar, fg_color=COLORS["panel"], corner_radius=0)
         spacer.pack(fill="both", expand=True)
 
         settings_btn = ctk.CTkButton(
             sidebar,
-            text="⚙ Settings",
+            text="Settings",
             command=self.show_settings,
             fg_color=COLORS["panel_alt"],
             hover_color=COLORS["outline"],
@@ -166,9 +309,17 @@ class SollieGUI:
         content_frame.grid_columnconfigure(0, weight=1)
         content_frame.grid_rowconfigure(2, weight=1)
 
-        header_frame = ctk.CTkFrame(content_frame, fg_color=COLORS["panel"], corner_radius=18)
+        header_frame = ctk.CTkFrame(
+            content_frame,
+            fg_color=COLORS["panel"],
+            corner_radius=18,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
         header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         header_frame.grid_columnconfigure(0, weight=1)
+        header_frame.grid_columnconfigure(1, weight=0)
+
         header_title = ctk.CTkLabel(
             header_frame,
             text="Sollie Command Center",
@@ -178,16 +329,68 @@ class SollieGUI:
         header_title.grid(row=0, column=0, sticky="w", padx=18, pady=(12, 2))
         header_sub = ctk.CTkLabel(
             header_frame,
-            text="Local-first · Safe actions · Agentic tasks",
+            text="Local-first · Offline · Safe actions",
             font=FONTS["subtitle"],
             text_color=COLORS["muted"]
         )
         header_sub.grid(row=1, column=0, sticky="w", padx=18, pady=(0, 12))
 
+        accent_bar = ctk.CTkFrame(header_frame, fg_color=COLORS["accent"], corner_radius=0, height=2)
+        accent_bar.grid(row=2, column=0, columnspan=2, sticky="ew", padx=18, pady=(0, 10))
+
+        hud_frame = ctk.CTkFrame(header_frame, fg_color=COLORS["panel"], corner_radius=12)
+        hud_frame.grid(row=0, column=1, rowspan=2, sticky="e", padx=18, pady=12)
+
+        def hud_chip(parent, title, value, color):
+            chip = ctk.CTkFrame(
+                parent,
+                fg_color=COLORS["panel_alt"],
+                corner_radius=12,
+                border_width=1,
+                border_color=COLORS["outline"]
+            )
+            chip.pack(padx=4, pady=4, fill="x")
+            title_label = ctk.CTkLabel(
+                chip,
+                text=title,
+                font=FONTS["caption"],
+                text_color=COLORS["muted"]
+            )
+            title_label.pack(padx=10, pady=(6, 0), anchor="w")
+            value_label = ctk.CTkLabel(
+                chip,
+                text=value,
+                font=FONTS["body_bold"],
+                text_color=color
+            )
+            value_label.pack(padx=10, pady=(0, 6), anchor="w")
+            return value_label
+
+        self.hud_labels = {}
+        self.hud_labels["model"] = hud_chip(hud_frame, "MODEL", self.brain.config.get("lm_studio", {}).get("model", "local"), COLORS["accent"])
+        self.hud_labels["mood"] = hud_chip(hud_frame, "MOOD", "CALM", COLORS["accent_alt"])
+        self.hud_labels["memory"] = hud_chip(hud_frame, "MEMORY", "0 ITEMS", COLORS["info"])
+        self.hud_labels["task"] = hud_chip(hud_frame, "TASK", "ON" if self.task_enabled else "OFF", COLORS["success"] if self.task_enabled else COLORS["danger"])
+        self.hud_labels["lm"] = hud_chip(hud_frame, "LM STUDIO", self.connection_status, COLORS["warning"])
+
         # Action approval frame (hidden by default)
-        self.approval_frame = ctk.CTkFrame(content_frame, fg_color=COLORS["panel_alt"], corner_radius=16)
+        self.approval_frame = ctk.CTkFrame(
+            content_frame,
+            fg_color=COLORS["panel_alt"],
+            corner_radius=16,
+            border_width=1,
+            border_color=COLORS["outline_bright"]
+        )
         self.approval_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         self.approval_frame.grid_remove()
+
+        approval_title = ctk.CTkLabel(
+            self.approval_frame,
+            text="ACTION GATE",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        )
+        approval_title.pack(pady=(10, 0))
 
         self.approval_label = ctk.CTkLabel(
             self.approval_frame,
@@ -195,14 +398,14 @@ class SollieGUI:
             font=FONTS["body_bold"],
             text_color=COLORS["text"]
         )
-        self.approval_label.pack(pady=(10, 6))
+        self.approval_label.pack(pady=(6, 6))
 
         approval_buttons = ctk.CTkFrame(self.approval_frame, fg_color=COLORS["panel_alt"], corner_radius=12)
         approval_buttons.pack(pady=(0, 10))
 
         self.approve_btn = ctk.CTkButton(
             approval_buttons,
-            text="✓ Approve",
+            text="Approve",
             command=self.approve_action,
             fg_color=COLORS["accent"],
             hover_color=COLORS["accent_hover"],
@@ -213,17 +416,23 @@ class SollieGUI:
 
         self.deny_btn = ctk.CTkButton(
             approval_buttons,
-            text="✗ Deny",
+            text="Deny",
             command=self.deny_action,
             fg_color=COLORS["danger"],
-            hover_color="#c85b4a",
+            hover_color="#e14f63",
             text_color=COLORS["bg"],
             width=140
         )
         self.deny_btn.pack(side="left", padx=6)
 
         # Chat display area
-        chat_frame = ctk.CTkFrame(content_frame, fg_color=COLORS["panel_alt"], corner_radius=18)
+        chat_frame = ctk.CTkFrame(
+            content_frame,
+            fg_color=COLORS["panel_alt"],
+            corner_radius=18,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
         chat_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
         chat_frame.grid_rowconfigure(0, weight=1)
         chat_frame.grid_columnconfigure(0, weight=1)
@@ -235,6 +444,8 @@ class SollieGUI:
             state="disabled",
             fg_color=COLORS["panel_alt"],
             text_color=COLORS["text"],
+            border_width=1,
+            border_color=COLORS["outline"],
             scrollbar_button_color=COLORS["outline"],
             scrollbar_button_hover_color=COLORS["accent_hover"]
         )
@@ -242,7 +453,13 @@ class SollieGUI:
         self.configure_chat_tags()
 
         # Input area
-        input_frame = ctk.CTkFrame(content_frame, fg_color=COLORS["panel"], corner_radius=18)
+        input_frame = ctk.CTkFrame(
+            content_frame,
+            fg_color=COLORS["panel"],
+            corner_radius=18,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
         input_frame.grid(row=3, column=0, sticky="ew")
         input_frame.grid_columnconfigure(0, weight=1)
 
@@ -254,7 +471,7 @@ class SollieGUI:
             fg_color=COLORS["panel_alt"],
             text_color=COLORS["text"],
             placeholder_text_color=COLORS["muted"],
-            border_color=COLORS["outline"],
+            border_color=COLORS["accent"],
             border_width=1
         )
         self.input_box.grid(row=0, column=0, sticky="ew", padx=(12, 10), pady=12)
@@ -272,7 +489,38 @@ class SollieGUI:
             text_color=COLORS["bg"]
         )
         self.send_btn.grid(row=0, column=1, padx=(0, 12), pady=12)
+
+        utility_frame = ctk.CTkFrame(input_frame, fg_color=COLORS["panel"], corner_radius=0)
+        utility_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=12, pady=(0, 10))
+        utility_frame.grid_columnconfigure(0, weight=1)
+
+        self.copy_btn = ctk.CTkButton(
+            utility_frame,
+            text="Copy Last",
+            command=self.copy_last_response,
+            height=28,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        self.copy_btn.grid(row=0, column=0, padx=(0, 8), sticky="w")
+
+        self.export_btn = ctk.CTkButton(
+            utility_frame,
+            text="Export Chat",
+            command=self.export_chat_history,
+            height=28,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        self.export_btn.grid(row=0, column=1, padx=(0, 8), sticky="w")
         
+        self.update_queue_status()
+        self.set_connection_status(self.connection_status)
+        self.refresh_hud()
+        self.update_system_pulse()
+
         # Add welcome message
         self.add_message("Sollie", "Hello! I'm Sollie, your AI assistant. I'm here to help you with tasks on your PC. What can I do for you today?", "assistant")
     
@@ -295,6 +543,7 @@ class SollieGUI:
             self.chat_display.insert("end", prefix, "assistant_name")
             self.insert_markdown(message, "assistant_msg")
             self.chat_display.insert("end", "\n")
+            self.last_assistant_message = message
         elif msg_type == "system":
             self.chat_display.insert("end", f"\n[{timestamp}] SYSTEM: ", "system_name")
             self.insert_markdown(message, "system_msg")
@@ -311,7 +560,7 @@ class SollieGUI:
         text_widget = getattr(self.chat_display, "_textbox", self.chat_display)
 
         for name, color in [
-            ("user_name", COLORS["info"]),
+            ("user_name", COLORS["accent_alt"]),
             ("assistant_name", COLORS["accent"]),
             ("system_name", COLORS["warning"]),
             ("action_name", COLORS["danger"]),
@@ -409,6 +658,228 @@ class SollieGUI:
                 print(f"UI update error: {e}")
 
         self.window.after(50, self.process_ui_queue)
+
+    def save_config(self):
+        try:
+            with open(self.config_path, "w", encoding="utf-8") as handle:
+                json.dump(self.brain.config, handle, ensure_ascii=True, indent=2)
+        except Exception as e:
+            self.add_message("System", f"Config save failed: {str(e)}", "system")
+
+    def update_hud_fields(self):
+        if threading.current_thread() is not threading.main_thread():
+            self.enqueue_ui(self.update_hud_fields)
+            return
+
+        mood = self.brain.get_mood_state() or {}
+        mood_label = str(mood.get("label", "calm")).upper()
+
+        memory_items = self.brain.memory.get_user_memory(limit=None)
+        memory_count = len(memory_items) if memory_items else 0
+
+        model_name = self.brain.config.get("lm_studio", {}).get("model", "local")
+        task_state = "ON" if self.task_enabled else "OFF"
+        task_color = COLORS["success"] if self.task_enabled else COLORS["danger"]
+
+        lm_status = self.connection_status.upper()
+        if lm_status == "ONLINE":
+            lm_color = COLORS["success"]
+        elif lm_status == "OFFLINE":
+            lm_color = COLORS["danger"]
+        else:
+            lm_color = COLORS["warning"]
+
+        self.hud_labels["model"].configure(text=model_name)
+        self.hud_labels["mood"].configure(text=mood_label)
+        self.hud_labels["memory"].configure(text=f"{memory_count} ITEMS")
+        self.hud_labels["task"].configure(text=task_state, text_color=task_color)
+        self.hud_labels["lm"].configure(text=lm_status, text_color=lm_color)
+
+    def refresh_hud(self):
+        self.update_hud_fields()
+        self.window.after(2000, self.refresh_hud)
+
+    def update_queue_status(self):
+        if threading.current_thread() is not threading.main_thread():
+            self.enqueue_ui(self.update_queue_status)
+            return
+
+        queue_items = []
+        if self.pending_action:
+            queue_items.append(self.pending_action.get("description", "Pending action"))
+        queue_items.extend([
+            item.get("description", "Pending action")
+            for item in self.pending_actions[:2]
+        ])
+
+        total = (1 if self.pending_action else 0) + len(self.pending_actions)
+        if total == 0:
+            text = "No pending actions."
+            color = COLORS["muted"]
+        else:
+            lines = [f"{total} pending action(s):"]
+            for item in queue_items:
+                lines.append(f"- {item}")
+            text = "\n".join(lines)
+            color = COLORS["text"]
+
+        self.queue_status.configure(text=text, text_color=color)
+
+    def update_system_pulse(self):
+        metrics = self.get_system_metrics(interval=0)
+        cpu = metrics.get("cpu_percent", 0.0)
+        memory = metrics.get("memory_percent", 0.0)
+        disk = metrics.get("disk_percent", 0.0)
+
+        self.cpu_label.configure(text=f"CPU: {cpu:.0f}%")
+        self.cpu_bar.set(min(max(cpu / 100.0, 0.0), 1.0))
+
+        self.mem_label.configure(text=f"Memory: {memory:.0f}%")
+        self.mem_bar.set(min(max(memory / 100.0, 0.0), 1.0))
+
+        self.disk_label.configure(text=f"Disk: {disk:.0f}%")
+        self.disk_bar.set(min(max(disk / 100.0, 0.0), 1.0))
+
+        self.window.after(2000, self.update_system_pulse)
+
+    def set_connection_status(self, status):
+        if threading.current_thread() is not threading.main_thread():
+            self.enqueue_ui(self.set_connection_status, status)
+            return
+
+        self.connection_status = status.upper()
+        if self.connection_status == "ONLINE":
+            color = COLORS["success"]
+        elif self.connection_status == "OFFLINE":
+            color = COLORS["danger"]
+        else:
+            color = COLORS["warning"]
+
+        self.connection_label.configure(text=f"LM: {self.connection_status}", text_color=color)
+        self.update_hud_fields()
+
+    def toggle_task_mode(self):
+        self.task_enabled = bool(self.task_var.get())
+        self.brain.config.setdefault("agent", {})["enabled"] = self.task_enabled
+        self.save_config()
+        self.update_hud_fields()
+        state = "enabled" if self.task_enabled else "disabled"
+        self.add_message("System", f"Task mode {state}.", "system")
+
+    def toggle_monitoring(self):
+        self.monitoring_enabled = bool(self.monitor_var.get())
+        self.brain.config.setdefault("monitoring", {})["enabled"] = self.monitoring_enabled
+        self.save_config()
+        self.add_message("System", f"Monitoring {'enabled' if self.monitoring_enabled else 'disabled'}.", "system")
+
+    def toggle_suggestions(self):
+        self.suggestions_enabled = bool(self.suggest_var.get())
+        self.brain.config.setdefault("proactive_suggestions", {})["enabled"] = self.suggestions_enabled
+        self.save_config()
+        self.add_message("System", f"Suggestions {'enabled' if self.suggestions_enabled else 'disabled'}.", "system")
+
+    def toggle_auto_queue(self):
+        self.auto_queue_enabled = bool(self.auto_queue_var.get())
+        self.brain.config.setdefault("proactive_suggestions", {})["auto_queue_actions"] = self.auto_queue_enabled
+        self.save_config()
+        self.add_message("System", f"Auto-queue {'enabled' if self.auto_queue_enabled else 'disabled'}.", "system")
+
+    def copy_last_response(self):
+        if not self.last_assistant_message:
+            self.add_message("System", "No assistant response to copy yet.", "system")
+            return
+
+        self.window.clipboard_clear()
+        self.window.clipboard_append(self.last_assistant_message)
+        self.add_message("System", "Copied last response to clipboard.", "system")
+
+    def export_chat_history(self):
+        default_name = f"sollie_chat_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text Files", "*.txt")],
+            initialfile=default_name
+        )
+        if not file_path:
+            return
+
+        messages = self.brain.memory.get_conversation_history_with_timestamps(limit=None)
+        try:
+            with open(file_path, "w", encoding="utf-8") as handle:
+                for item in messages:
+                    timestamp = item.get("timestamp", "")
+                    role = item.get("role", "").capitalize()
+                    content = item.get("content", "")
+                    handle.write(f"[{timestamp}] {role}: {content}\n")
+        except Exception as e:
+            self.add_message("System", f"Export failed: {str(e)}", "system")
+            return
+
+        self.add_message("System", f"Chat exported to: {file_path}", "system")
+
+    def show_memory_vault(self):
+        vault = ctk.CTkToplevel(self.window)
+        vault.title("Memory Vault")
+        vault.geometry("720x520")
+        vault.configure(fg_color=COLORS["bg"])
+
+        tabs = ctk.CTkTabview(vault, fg_color=COLORS["panel"])
+        tabs.pack(fill="both", expand=True, padx=12, pady=12)
+
+        profile_tab = tabs.add("Profile")
+        memory_tab = tabs.add("Memory")
+        summary_tab = tabs.add("Summaries")
+
+        def make_box(parent):
+            box = ctk.CTkTextbox(
+                parent,
+                fg_color=COLORS["panel_alt"],
+                text_color=COLORS["text"],
+                font=FONTS["body"],
+                wrap="word"
+            )
+            box.pack(fill="both", expand=True, padx=12, pady=12)
+            return box
+
+        profile_box = make_box(profile_tab)
+        memory_box = make_box(memory_tab)
+        summary_box = make_box(summary_tab)
+
+        profile = self.brain.memory.get_user_profile()
+        profile_lines = ["User Profile:"]
+        for key, values in profile.items():
+            label = key.replace("_", " ").title()
+            profile_lines.append(f"\n{label}:")
+            if values:
+                for value in values:
+                    profile_lines.append(f"- {value}")
+            else:
+                profile_lines.append("- None")
+
+        profile_box.insert("end", "\n".join(profile_lines))
+        profile_box.configure(state="disabled")
+
+        memory_items = self.brain.memory.get_user_memory(limit=200, include_meta=True)
+        memory_lines = ["Long-term Memory:"]
+        if memory_items:
+            for item in memory_items:
+                memory_lines.append(
+                    f"- [{item.get('type')}] {item.get('value')} (used {item.get('use_count', 0)}x)"
+                )
+        else:
+            memory_lines.append("- No long-term memory items yet.")
+        memory_box.insert("end", "\n".join(memory_lines))
+        memory_box.configure(state="disabled")
+
+        summaries = self.brain.memory.get_preference("conversation_summaries", default=[])
+        summary_lines = ["Conversation Summaries:"]
+        if summaries:
+            for item in summaries[-5:]:
+                summary_lines.append(f"\n[{item.get('timestamp', '')}]\n{item.get('summary', '')}")
+        else:
+            summary_lines.append("- No summaries yet.")
+        summary_box.insert("end", "\n".join(summary_lines))
+        summary_box.configure(state="disabled")
     
     def send_message(self):
         """Send user message to Sollie"""
@@ -423,7 +894,7 @@ class SollieGUI:
         self.add_message("You", message, "user")
         
         # Update status
-        self.set_status("● Thinking...", COLORS["warning"])
+        self.set_status("THINKING...", COLORS["warning"])
         
         # Process in background thread to keep UI responsive
         thread = threading.Thread(target=self.process_message, args=(message,))
@@ -437,7 +908,7 @@ class SollieGUI:
             if normalized in ["/stop", "/cancel", "stop task"]:
                 self.clear_pending_task()
                 self.add_message("System", "Task cancelled.", "system")
-                self.set_status("● Ready", "green")
+                self.set_status("READY", COLORS["success"])
                 return
 
             if self.is_task_command(message):
@@ -445,13 +916,17 @@ class SollieGUI:
                     self.add_message("System", "Task mode is disabled in config.json.", "system")
                 else:
                     self.process_task_message(message)
-                self.set_status("● Ready", "green")
+                self.set_status("READY", COLORS["success"])
                 return
 
             result = self.brain.chat(message)
             
             # Display Sollie's response
             self.add_message("Sollie", result['response'], "assistant")
+
+            follow_up = result.get("follow_up")
+            if isinstance(follow_up, str) and follow_up.strip():
+                self.add_message("Sollie", follow_up.strip(), "assistant")
             
             # Check if action needed
             if result['action']:
@@ -463,11 +938,12 @@ class SollieGUI:
                     self.execute_pending_action()
             
             # Update status
-            self.set_status("● Ready", COLORS["accent"])
+            self.set_status("READY", COLORS["success"])
+            self.update_hud_fields()
         
         except Exception as e:
             self.add_message("System", f"Error: {str(e)}", "system")
-            self.set_status("● Error", COLORS["danger"])
+            self.set_status("ERROR", COLORS["danger"])
 
     def send_quick_message(self, message):
         self.input_box.delete(0, "end")
@@ -481,12 +957,14 @@ class SollieGUI:
             return
         self.approval_label.configure(text=f"⚠ Sollie wants to: {action['description']}")
         self.approval_frame.grid()
+        self.update_queue_status()
     
     def approve_action(self):
         """User approves the action"""
         if self.pending_action:
             self.add_message("System", f"Executing: {self.pending_action['description']}", "action")
             self.execute_pending_action()
+        self.update_queue_status()
     
     def deny_action(self):
         """User denies the action"""
@@ -499,6 +977,7 @@ class SollieGUI:
                 result="User denied"
             )
         self.clear_pending_task()
+        self.update_queue_status()
     
     def execute_pending_action(self):
         """Execute the pending action"""
@@ -521,6 +1000,7 @@ class SollieGUI:
                 self.execute_pending_action()
         else:
             self.hide_approval_ui()
+        self.update_queue_status()
     
     def hide_approval_ui(self):
         """Hide the approval UI"""
@@ -533,6 +1013,7 @@ class SollieGUI:
         self.pending_action = None
         self.pending_actions = []
         self.hide_approval_ui()
+        self.update_queue_status()
 
     def is_task_command(self, message):
         normalized = message.strip().lower()
@@ -577,12 +1058,9 @@ class SollieGUI:
         self.pending_actions = actions
         self.pending_action = self.pending_actions.pop(0)
         self.show_approval_request(self.pending_action)
+        self.update_queue_status()
 
     def start_monitoring(self):
-        config = self.brain.config.get("monitoring", {})
-        if not config.get("enabled", False):
-            return
-
         monitor_thread = threading.Thread(target=self.monitor_loop, daemon=True)
         monitor_thread.start()
 
@@ -605,8 +1083,8 @@ class SollieGUI:
             return start_time <= now <= end_time
         return now >= start_time or now <= end_time
 
-    def get_system_metrics(self):
-        cpu_percent = psutil.cpu_percent(interval=1)
+    def get_system_metrics(self, interval=1):
+        cpu_percent = psutil.cpu_percent(interval=interval)
         memory_percent = psutil.virtual_memory().percent
         if os.name == "nt":
             root = os.environ.get("SystemDrive", "C:") + "\\"
@@ -657,16 +1135,15 @@ class SollieGUI:
         return actions
 
     def monitor_loop(self):
-        config = self.brain.config.get("monitoring", {})
-        suggestions_config = self.brain.config.get("proactive_suggestions", {})
-
-        interval = config.get("interval_sec", 30)
-        cooldown = suggestions_config.get("cooldown_sec", 600)
-        suggestions_enabled = suggestions_config.get("enabled", False)
-        auto_queue = suggestions_config.get("auto_queue_actions", False)
-
         while True:
-            if not self.is_quiet_hours(config):
+            config = self.brain.config.get("monitoring", {})
+            suggestions_config = self.brain.config.get("proactive_suggestions", {})
+            interval = max(5, int(config.get("interval_sec", 30)))
+            cooldown = suggestions_config.get("cooldown_sec", 600)
+            suggestions_enabled = self.suggestions_enabled and suggestions_config.get("enabled", False)
+            auto_queue = self.auto_queue_enabled and suggestions_config.get("auto_queue_actions", False)
+
+            if self.monitoring_enabled and not self.is_quiet_hours(config):
                 metrics = self.get_system_metrics()
                 alerts = []
 
@@ -701,7 +1178,7 @@ class SollieGUI:
         """Show settings window"""
         settings_window = ctk.CTkToplevel(self.window)
         settings_window.title("Sollie Settings")
-        settings_window.geometry("500x400")
+        settings_window.geometry("520x520")
         settings_window.configure(fg_color=COLORS["bg"])
         
         ctk.CTkLabel(
@@ -742,6 +1219,26 @@ class SollieGUI:
             text_color=COLORS["text"]
         )
         history_btn.pack(pady=10)
+
+        memory_btn = ctk.CTkButton(
+            settings_window,
+            text="Open Memory Vault",
+            command=self.show_memory_vault,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        memory_btn.pack(pady=10)
+
+        export_btn = ctk.CTkButton(
+            settings_window,
+            text="Export Chat History",
+            command=self.export_chat_history,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        export_btn.pack(pady=10)
         
         # Clear memory
         clear_btn = ctk.CTkButton(
@@ -762,8 +1259,10 @@ class SollieGUI:
             result = self.brain.test_connection()
             if result['success']:
                 self.add_message("System", f"✓ Connected! Response: {result['response']}", "system")
+                self.set_connection_status("ONLINE")
             else:
                 self.add_message("System", f"✗ Connection failed: {result['error']}", "system")
+                self.set_connection_status("OFFLINE")
         
         thread = threading.Thread(target=test)
         thread.daemon = True
