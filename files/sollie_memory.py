@@ -83,6 +83,61 @@ class SollieMemory:
         
         # Return in correct order (oldest first)
         return [{"role": role, "content": content} for role, content in reversed(messages)]
+
+    def get_conversation_history_with_timestamps(self, limit=50):
+        """Retrieve recent conversation history with timestamps"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            'SELECT timestamp, role, content FROM conversations ORDER BY id DESC LIMIT ?',
+            (limit,)
+        )
+
+        messages = cursor.fetchall()
+        conn.close()
+
+        # Return in correct order (oldest first)
+        return [
+            {"timestamp": timestamp, "role": role, "content": content}
+            for timestamp, role, content in reversed(messages)
+        ]
+
+    def get_conversation_count(self):
+        """Get total conversation message count"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT COUNT(*) FROM conversations')
+        count = cursor.fetchone()[0]
+        conn.close()
+
+        return count
+
+    def get_messages_for_summary(self, keep_last=20):
+        """Get older messages for summarization, excluding recent ones"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            'SELECT id FROM conversations ORDER BY id DESC LIMIT ?',
+            (keep_last,)
+        )
+        recent_ids = [row[0] for row in cursor.fetchall()]
+
+        if recent_ids:
+            placeholders = ','.join('?' * len(recent_ids))
+            cursor.execute(
+                f'SELECT role, content FROM conversations WHERE id NOT IN ({placeholders}) ORDER BY id ASC',
+                recent_ids
+            )
+        else:
+            cursor.execute('SELECT role, content FROM conversations ORDER BY id ASC')
+
+        messages = cursor.fetchall()
+        conn.close()
+
+        return [{"role": role, "content": content} for role, content in messages]
     
     def log_action(self, action_type, action_details, approved, result=None):
         """Log an action that Sollie attempted or executed"""
@@ -124,6 +179,60 @@ class SollieMemory:
         if result:
             return json.loads(result[0])
         return default
+
+    def get_user_profile(self):
+        """Get stored user profile data"""
+        default_profile = {
+            "preferences": [],
+            "project_context": [],
+            "personal_context": [],
+            "working_patterns": [],
+            "humor_tolerance": [],
+            "goals": [],
+            "other": []
+        }
+        return self.get_preference("user_profile", default_profile)
+
+    def update_user_profile(self, updates):
+        """Merge new profile facts into stored profile"""
+        profile = self.get_user_profile()
+
+        for key, values in updates.items():
+            if not isinstance(values, list):
+                continue
+
+            existing = profile.get(key, [])
+            existing_lower = {
+                item.lower() for item in existing if isinstance(item, str)
+            }
+
+            for item in values:
+                if not isinstance(item, str):
+                    continue
+                if item.lower() not in existing_lower:
+                    existing.append(item)
+                    existing_lower.add(item.lower())
+
+            profile[key] = existing
+
+        self.save_preference("user_profile", profile)
+        return profile
+
+    def add_conversation_summary(self, summary_text):
+        """Store the latest conversation summary"""
+        if not summary_text:
+            return
+
+        timestamp = datetime.now().isoformat()
+        summaries = self.get_preference("conversation_summaries", default=[])
+        summaries.append({"timestamp": timestamp, "summary": summary_text})
+
+        self.save_preference("conversation_summaries", summaries)
+        self.save_preference("conversation_summary", summary_text)
+
+    def get_latest_summary(self):
+        """Get the latest conversation summary"""
+        return self.get_preference("conversation_summary", default="")
     
     def get_recent_actions(self, limit=10):
         """Get recent action log entries"""
