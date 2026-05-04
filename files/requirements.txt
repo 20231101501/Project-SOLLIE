@@ -1,4 +1,4 @@
-# Sollie AI Assistant - Python Dependencies
+# Sol AI Assistant - Python Dependencies
 
 # API and HTTP requests
 requests>=2.31.0

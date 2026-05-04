@@ -1,6 +1,6 @@
 ╔══════════════════════════════════════════════════════════════════╗
 ║                                                                  ║
-║                    🤖 SOLLIE IS READY! 🤖                        ║
+║                    🤖 SOL IS READY! 🤖                        ║
 ║                                                                  ║
 ║              Your Personal AI Assistant - Plan B                ║
 ║                                                                  ║
@@ -13,12 +13,12 @@
 ✓ config.json              - Settings & safety configuration
 ✓ requirements.txt         - Python dependencies list
 ✓ setup.py                 - Automated installation script
-✓ test_sollie.py          - System verification tests
+✓ test_sol.py          - System verification tests
 
-✓ sollie_core.py          - Main AI brain
-✓ sollie_gui.py           - Graphical user interface
-✓ sollie_actions.py       - PC control & automation
-✓ sollie_memory.py        - Memory & learning system
+✓ sol_core.py          - Main AI brain
+✓ sol_gui.py           - Graphical user interface
+✓ sol_actions.py       - PC control & automation
+✓ sol_memory.py        - Memory & learning system
 
 ✓ README.md               - Full documentation
 ✓ QUICKSTART.txt          - Quick start guide
@@ -66,7 +66,7 @@ Layer 1: WHITELIST SYSTEM
   → Dangerous actions are blocked
 
 Layer 2: APPROVAL MODE
-  → Sollie asks before EVERY action
+  → Sol asks before EVERY action
   → You must click "Approve" to proceed
   → Actions can be denied at any time
 
@@ -82,7 +82,7 @@ Layer 3: ACTION LOGGING
 ════════════════════════
 
 STEP 1: Run Setup
-  → Open Command Prompt in Sollie folder
+  → Open Command Prompt in Sol folder
   → Type: python setup.py
   → Wait for installation (2-5 mins)
 
@@ -91,8 +91,8 @@ STEP 2: Setup LM Studio
   → Download model: "Llama-3.1-8B-Instruct"
   → Start Local Server (keep it running)
 
-STEP 3: Launch Sollie
-  → Type: python sollie_launcher.py
+STEP 3: Launch Sol
+  → Type: python sol_launcher.py
   → Start chatting!
 
 📄 See QUICKSTART.txt for detailed steps
@@ -104,7 +104,7 @@ STEP 3: Launch Sollie
 ════════════════
 
 Chat:
-  "Hey Sollie, how are you?"
+  "Hey Sol, how are you?"
   "Tell me a joke"
   "What's the weather like?" (if you add weather)
 
@@ -116,10 +116,10 @@ PC Control:
 
 With Approval:
   You: "Open Spotify"
-  Sollie: "I can open Spotify for you."
+  Sol: "I can open Spotify for you."
   [Approval prompt appears]
   You: [Click Approve]
-  Sollie: "✓ Opened Spotify"
+  Sol: "✓ Opened Spotify"
 
 
 ═══════════════════════════════════════════════════════════════
@@ -174,7 +174,7 @@ Add Apps:
   ]
 
 Change Personality:
-  "personality": "You are Sollie, a..."
+  "personality": "You are Sol, a..."
 
 Disable Approval (⚠ Advanced Only):
   "approval_required": false
@@ -216,7 +216,7 @@ Q: Is this really free?
 A: Yes! 100% free. No subscriptions, no hidden costs.
 
 Q: Will this break my PC?
-A: No. Sollie has multiple safety layers and can't access
+A: No. Sol has multiple safety layers and can't access
    system files or perform dangerous operations.
 
 Q: Can I use this offline?
@@ -225,12 +225,12 @@ A: Yes! After downloading the AI model, everything runs locally.
 Q: How much disk space do I need?
 A: ~20GB total (model + files + overhead)
 
-Q: Can I customize Sollie's personality?
+Q: Can I customize Sol's personality?
 A: Absolutely! Edit config.json → "personality" field
 
 Q: What if something goes wrong?
 A: Check Settings → View Action Log to see what happened.
-  Worst case: delete sollie_memory.json and restart fresh.
+  Worst case: delete sol_memory.json and restart fresh.
 
 
 ═══════════════════════════════════════════════════════════════
@@ -238,17 +238,17 @@ A: Check Settings → View Action Log to see what happened.
 🎯 YOUR MISSION (IF YOU CHOOSE TO ACCEPT)
 ═══════════════════════════════════════════
 
-1. Download all files to a folder (e.g., C:\Users\You\Sollie)
+1. Download all files to a folder (e.g., C:\Users\You\Sol)
 
 2. Run: python setup.py
 
 3. Install LM Studio + download model
 
-4. Run: python test_sollie.py (verify everything works)
+4. Run: python test_sol.py (verify everything works)
 
-5. Run: python sollie_gui.py (launch Sollie!)
+5. Run: python sol_gui.py (launch Sol!)
 
-6. Say: "Hey Sollie, let's get started!"
+6. Say: "Hey Sol, let's get started!"
 
 
 ═══════════════════════════════════════════════════════════════
@@ -257,7 +257,7 @@ A: Check Settings → View Action Log to see what happened.
 ═══════════
 
 • Keep LM Studio running in the background
-• Check action log regularly to see what Sollie tried
+• Check action log regularly to see what Sol tried
 • Start with simple commands, then get creative
 • Customize allowed_applications for your workflow
 • Be specific with commands for best results
@@ -273,13 +273,13 @@ You now have everything you need to build your own
 personal AI assistant - completely free, private, and
 safe!
 
-Sollie is designed to be:
+Sol is designed to be:
   • Helpful without being intrusive
   • Safe by default
   • Transparent about what it does
   • Respectful of your privacy
 
-Remember: Sollie works FOR you. You have complete control.
+Remember: Sol works FOR you. You have complete control.
 
 
 ═══════════════════════════════════════════════════════════════
@@ -289,7 +289,7 @@ Remember: Sollie works FOR you. You have complete control.
 
 • README.md - Comprehensive documentation
 • QUICKSTART.txt - Step-by-step setup guide
-• test_sollie.py - Diagnostic tool
+• test_sol.py - Diagnostic tool
 • Action logs - Track what happened
 
 
@@ -297,7 +297,7 @@ Remember: Sollie works FOR you. You have complete control.
 
 Good luck with your AI assistant journey! 🚀
 
-Welcome to the future. Welcome to Sollie. 🤖
+Welcome to the future. Welcome to Sol. 🤖
 
 
 ═══════════════════════════════════════════════════════════════

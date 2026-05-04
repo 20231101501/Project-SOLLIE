@@ -1,5 +1,5 @@
 """
-Sollie Launcher
+Sol Launcher
 Starts LM Studio (optional) and then runs the GUI
 """
 
@@ -13,7 +13,7 @@ import threading
 
 import requests
 
-from sollie_gui import SollieGUI
+from sol_gui import SolGUI
 
 BASE_DIR = Path(__file__).resolve().parent
 LOG_PATH = BASE_DIR / "launcher.log"
@@ -116,7 +116,7 @@ def main():
     timeout_sec = config.get("lm_studio", {}).get("startup_timeout_sec", 45)
 
     start_lm_studio(config)
-    app = SollieGUI()
+    app = SolGUI()
     waiter = threading.Thread(
         target=wait_for_server_and_notify,
         args=(app, api_url, timeout_sec),

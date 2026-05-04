@@ -1,4 +1,4 @@
-# 🤖 SOLLIE - Your Personal AI Assistant
+# 🤖 SOL - Your Personal AI Assistant
 
 **A local, private, and safe AI assistant that can control your PC**
 
@@ -6,9 +6,9 @@ Built with love for complete privacy and control - everything runs on YOUR hardw
 
 ---
 
-## 🎯 What is Sollie?
+## 🎯 What is Sol?
 
-Sollie is your personal AI assistant (like JARVIS) that:
+Sol is your personal AI assistant (like JARVIS) that:
 - ✅ Runs 100% locally on your PC (no cloud, no subscriptions)
 - ✅ Has a friendly personality and learns your preferences
 - ✅ Can control your PC safely (open apps, manage files, etc.)
@@ -27,19 +27,19 @@ Sollie is your personal AI assistant (like JARVIS) that:
 - **Storage**: 20GB free space
 - **Python**: 3.8+ (you have: 3.14.4 ✓)
 
-**✓ Your PC is PERFECT for running Sollie!**
+**✓ Your PC is PERFECT for running Sol!**
 
 ---
 
 ## 📦 What You Get
 
 ```
-sollie/
+sol/
 ├── config.json           # Settings and safety rules
-├── sollie_core.py        # AI brain
-├── sollie_gui.py         # User interface
-├── sollie_actions.py     # PC control functions
-├── sollie_memory.py      # Memory & learning
+├── sol_core.py        # AI brain
+├── sol_gui.py         # User interface
+├── sol_actions.py     # PC control functions
+├── sol_memory.py      # Memory & learning
 ├── setup.py              # Installation script
 ├── requirements.txt      # Dependencies
 └── README.md             # This file
@@ -51,12 +51,12 @@ sollie/
 
 ### Step 1: Download & Extract Files
 
-1. Download the Sollie folder to your PC
-2. Extract to a location like: `C:\Users\YourName\Sollie`
+1. Download the Sol folder to your PC
+2. Extract to a location like: `C:\Users\YourName\Sol`
 
 ### Step 2: Run Setup
 
-1. Open **Command Prompt** in the Sollie folder:
+1. Open **Command Prompt** in the Sol folder:
    - Hold `Shift` + Right-click in the folder
    - Click "Open PowerShell window here" or "Open Command Prompt here"
 
@@ -84,29 +84,29 @@ sollie/
    - Click "Start Server"
    - Keep this running!
 
-### Step 4: Launch Sollie
+### Step 4: Launch Sol
 
 **Option A: Desktop Shortcut**
-- Double-click the "Sollie" shortcut on your desktop
+- Double-click the "Sol" shortcut on your desktop
 
 **Option B: Command Line**
 ```bash
-python sollie_launcher.py
+python sol_launcher.py
 ```
 
 ---
 
-## 💬 How to Use Sollie
+## 💬 How to Use Sol
 
 ### Basic Chat
-Just talk naturally! Sollie understands conversational language.
+Just talk naturally! Sol understands conversational language.
 
 ```
-You: Hey Sollie, how are you?
-Sollie: I'm doing great! Ready to help you with whatever you need.
+You: Hey Sol, how are you?
+Sol: I'm doing great! Ready to help you with whatever you need.
 
 You: What can you do?
-Sollie: I can help you with...
+Sol: I can help you with...
 ```
 
 ### Agentic Task Mode
@@ -158,10 +158,10 @@ You: Open video.mp4
 
 ### 🔒 Safety Features
 
-**Sollie ALWAYS asks before doing anything!**
+**Sol ALWAYS asks before doing anything!**
 
 When you request an action:
-1. Sollie analyzes the request
+1. Sol analyzes the request
 2. Shows you what it wants to do
 3. Waits for your approval
 4. Only executes if you click "Approve"
@@ -169,9 +169,9 @@ When you request an action:
 **Example:**
 ```
 You: Open Chrome
-Sollie: I can open Chrome for you.
+Sol: I can open Chrome for you.
 [Approval prompt appears]
-⚠ Sollie wants to: Open chrome.exe
+⚠ Sol wants to: Open chrome.exe
 [✓ Approve] [✗ Deny]
 ```
 
@@ -194,7 +194,7 @@ Tip: You can use full paths here if an app is not on your PATH.
 
 #### Adjust AI Personality
 ```json
-"personality": "You are Sollie, a helpful assistant who is witty and clever..."
+"personality": "You are Sol, a helpful assistant who is witty and clever..."
 ```
 
 #### Disable Approval (Advanced Users Only!)
@@ -248,7 +248,7 @@ python setup.py
 ```
 This will reinstall all dependencies.
 
-### Sollie is slow to respond
+### Sol is slow to respond
 **Solution:**
 - Use a smaller model (7B instead of 13B)
 - Check your GPU is being used in LM Studio
@@ -258,14 +258,14 @@ This will reinstall all dependencies.
 **Solution:**
 ```bash
 pip install customtkinter --break-system-packages --upgrade
-python sollie_gui.py
+python sol_gui.py
 ```
 
 ---
 
 ## 🎨 Customization Ideas
 
-### Change Sollie's Name
+### Change Sol's Name
 Edit `config.json`:
 ```json
 "name": "JARVIS"  // or whatever you like
@@ -293,13 +293,13 @@ In LM Studio, try these models:
 
 ## 🔐 Privacy & Security
 
-### What Sollie DOES:
+### What Sol DOES:
 ✅ Runs 100% on your local PC
 ✅ No internet connection needed (except for model download)
 ✅ All data stays on your computer
 ✅ No tracking, no telemetry, no cloud
 
-### What Sollie CANNOT do (by default):
+### What Sol CANNOT do (by default):
 ❌ Delete system files
 ❌ Shutdown/restart your PC
 ❌ Edit Windows registry
@@ -307,9 +307,9 @@ In LM Studio, try these models:
 ❌ Access blocked directories
 
 ### Action Logging
-Every action is logged in `sollie_memory.json`
+Every action is logged in `sol_memory.json`
 - View in Settings → "View Action Log"
-- See what Sollie tried to do
+- See what Sol tried to do
 - Review approved/denied actions
 
 ---
@@ -346,15 +346,15 @@ A: No! 100% free. No subscriptions, no API fees.
 A: Yes! Everything runs locally. Nothing is sent to the cloud.
 
 **Q: Can I add more capabilities?**
-A: Yes! Edit `sollie_actions.py` to add custom functions.
+A: Yes! Edit `sol_actions.py` to add custom functions.
 
 **Q: What if I break something?**
-A: Sollie has safety limits. It can't damage your system. Worst case: reinstall.
+A: Sol has safety limits. It can't damage your system. Worst case: reinstall.
 
 **Q: Can I use a different AI model?**
 A: Yes! Download any model in LM Studio and select it.
 
-**Q: How do I update Sollie?**
+**Q: How do I update Sol?**
 A: Replace the files and run `setup.py` again.
 
 ---
@@ -363,15 +363,15 @@ A: Replace the files and run `setup.py` again.
 
 ### Running Without GUI (Command Line)
 ```python
-from sollie_core import SollieBrain
+from sol_core import SolBrain
 
-brain = SollieBrain()
-response = brain.chat("Hello Sollie!")
+brain = SolBrain()
+response = brain.chat("Hello Sol!")
 print(response['response'])
 ```
 
 ### Custom Actions
-Add to `sollie_actions.py`:
+Add to `sol_actions.py`:
 ```python
 def my_custom_action(self, param):
     # Your code here
@@ -379,9 +379,9 @@ def my_custom_action(self, param):
 ```
 
 ### API Mode (for developers)
-Sollie can be used as a local API:
+Sol can be used as a local API:
 ```python
-# Your app → Sollie → LM Studio → Response
+# Your app → Sol → LM Studio → Response
 ```
 
 ---
@@ -410,7 +410,7 @@ No warranty provided - use at your own risk!
 3. Test LM Studio connection
 4. Check action logs in Settings
 
-**Remember: Sollie is designed to be safe. It will always ask before doing anything important!**
+**Remember: Sol is designed to be safe. It will always ask before doing anything important!**
 
 ---
 

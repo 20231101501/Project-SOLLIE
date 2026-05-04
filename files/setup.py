@@ -1,5 +1,5 @@
 """
-Sollie Setup Script
+Sol Setup Script
 Automates installation and initial configuration
 """
 
@@ -82,7 +82,7 @@ def test_imports():
 
 
 def create_desktop_shortcut():
-    """Create a desktop shortcut for Sollie (Windows only)"""
+    """Create a desktop shortcut for Sol (Windows only)"""
     if os.name != 'nt':
         return
     
@@ -92,20 +92,20 @@ def create_desktop_shortcut():
         import win32com.client
         
         desktop = Path.home() / "Desktop"
-        shortcut_path = desktop / "Sollie.lnk"
+        shortcut_path = desktop / "Sol.lnk"
         
         shell = win32com.client.Dispatch("WScript.Shell")
         shortcut = shell.CreateShortCut(str(shortcut_path))
 
         python_path = Path(sys.executable)
-        vbs_path = create_vbs_launcher(python_path, Path.cwd() / "sollie_launcher.py")
+        vbs_path = create_vbs_launcher(python_path, Path.cwd() / "sol_launcher.py")
         wscript_path = Path(os.environ.get("WINDIR", "C:\\Windows")) / "System32" / "wscript.exe"
 
         shortcut.Targetpath = str(wscript_path)
         shortcut.Arguments = str(vbs_path)
         shortcut.WorkingDirectory = str(Path.cwd())
 
-        icon_path = Path.cwd() / "assets" / "sollie.ico"
+        icon_path = Path.cwd() / "assets" / "sol.ico"
         if icon_path.exists():
             shortcut.IconLocation = str(icon_path)
         else:
@@ -115,7 +115,7 @@ def create_desktop_shortcut():
         print(f"✓ Desktop shortcut created: {shortcut_path}")
     except Exception as e:
         print(f"⚠ Could not create desktop shortcut: {e}")
-        print("  You can manually run: python sollie_gui.py")
+        print("  You can manually run: python sol_gui.py")
 
 
 def check_lm_studio():
@@ -135,7 +135,7 @@ def check_lm_studio():
     except requests.exceptions.RequestException:
         print("⚠ LM Studio is not running or not accessible")
         print("  Please start LM Studio and start the local server")
-        print("  Then you can run Sollie")
+        print("  Then you can run Sol")
         return False
 
 
@@ -144,7 +144,7 @@ def create_vbs_launcher(python_path, script_path):
     pythonw_path = python_path.with_name("pythonw.exe")
     launcher_path = pythonw_path if pythonw_path.exists() else python_path
 
-    vbs_path = Path.cwd() / "sollie_launcher.vbs"
+    vbs_path = Path.cwd() / "sol_launcher.vbs"
     def escape(path_value):
         return str(path_value).replace("\\", "\\\\")
 
@@ -167,7 +167,7 @@ def main():
     """Main setup function"""
     os.chdir(BASE_DIR)
     print("\n" + "🤖 "*20)
-    print("       SOLLIE - AI ASSISTANT SETUP")
+    print("       SOL - AI ASSISTANT SETUP")
     print("🤖 "*20 + "\n")
     
     steps = [
@@ -195,12 +195,12 @@ def main():
 ║                                                            ║
 ║  1. Make sure LM Studio is running with local server ON   ║
 ║                                                            ║
-║  2. Run Sollie with:                                       ║
-║     → python sollie_launcher.py                            ║
+║  2. Run Sol with:                                       ║
+║     → python sol_launcher.py                            ║
 ║                                                            ║
 ║  3. Or use the desktop shortcut (if created)              ║
 ║                                                            ║
-║  4. Chat with Sollie and test basic commands!             ║
+║  4. Chat with Sol and test basic commands!             ║
 ║                                                            ║
 ╚════════════════════════════════════════════════════════════╝
     """)
@@ -218,7 +218,7 @@ if __name__ == "__main__":
         print("Setup failed. Details were saved to setup.log")
         print(error_text)
 
-    if os.name == "nt" and os.environ.get("SOLLIE_NO_PAUSE") != "1":
+    if os.name == "nt" and os.environ.get("SOL_NO_PAUSE") != "1":
         input("\nPress Enter to exit...")
 
     if not success:

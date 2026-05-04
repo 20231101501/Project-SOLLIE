@@ -1,5 +1,5 @@
 """
-Sollie PC Actions Module
+Sol PC Actions Module
 Safe PC control operations with whitelist and approval system
 """
 
@@ -14,7 +14,7 @@ from pathlib import Path
 import webbrowser
 
 
-class SollieActions:
+class SolActions:
     def __init__(self, config_path="config.json"):
         self.config = self.load_config(config_path)
         self.user_home = Path.home()

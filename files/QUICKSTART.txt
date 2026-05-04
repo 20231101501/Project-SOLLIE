@@ -1,19 +1,19 @@
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
-║            🤖 SOLLIE - QUICK START GUIDE 🤖                    ║
+║            🤖 SOL - QUICK START GUIDE 🤖                    ║
 ║                                                                ║
-║          Get Sollie running in 10 minutes or less!            ║
+║          Get Sol running in 10 minutes or less!            ║
 ║                                                                ║
 ╚════════════════════════════════════════════════════════════════╝
 
 
 📋 CHECKLIST - Do these in order:
 
-  ☐ 1. Extract Sollie folder to your PC
+  ☐ 1. Extract Sol folder to your PC
   ☐ 2. Install dependencies
   ☐ 3. Setup LM Studio
   ☐ 4. Test everything
-  ☐ 5. Launch Sollie!
+  ☐ 5. Launch Sol!
 
 
 ═══════════════════════════════════════════════════════════════
@@ -21,12 +21,12 @@
 STEP 1: EXTRACT FILES
 ══════════════════════
 
-1. Put the Sollie folder somewhere easy like:
-   C:\Users\YourName\Sollie
+1. Put the Sol folder somewhere easy like:
+   C:\Users\YourName\Sol
 
 2. You should see these files:
-   • sollie_gui.py
-   • sollie_core.py
+   • sol_gui.py
+   • sol_core.py
    • config.json
    • setup.py
    • README.md
@@ -37,7 +37,7 @@ STEP 1: EXTRACT FILES
 STEP 2: INSTALL DEPENDENCIES
 ═════════════════════════════
 
-1. Open Command Prompt in the Sollie folder:
+1. Open Command Prompt in the Sol folder:
    → Hold Shift + Right-click in folder
    → Click "Open PowerShell window here"
 
@@ -80,9 +80,9 @@ STEP 3: SETUP LM STUDIO (THE AI BRAIN)
 STEP 4: TEST EVERYTHING
 ════════════════════════
 
-1. In Command Prompt (in Sollie folder), run:
+1. In Command Prompt (in Sol folder), run:
    
-   python test_sollie.py
+   python test_sol.py
 
 2. Check the results:
    ✓ All tests PASS? → You're ready!
@@ -98,17 +98,17 @@ Common issues:
 
 ═══════════════════════════════════════════════════════════════
 
-STEP 5: LAUNCH SOLLIE! 🚀
+STEP 5: LAUNCH SOL! 🚀
 ═══════════════════════
 
 Method A - Desktop Shortcut:
-  → Double-click "Sollie" icon on desktop
+  → Double-click "Sol" icon on desktop
 
 Method B - Command Line:
-  → Open Command Prompt in Sollie folder
-   → Run: python sollie_launcher.py
+  → Open Command Prompt in Sol folder
+   → Run: python sol_launcher.py
 
-You should see Sollie's chat window appear!
+You should see Sol's chat window appear!
 
 
 ═══════════════════════════════════════════════════════════════
@@ -116,13 +116,13 @@ You should see Sollie's chat window appear!
 FIRST CONVERSATION
 ═══════════════════
 
-Try these commands to test Sollie:
+Try these commands to test Sol:
 
-1. "Hey Sollie, introduce yourself"
+1. "Hey Sol, introduce yourself"
    → Tests basic chat
 
 2. "What can you do?"
-   → Shows Sollie's capabilities
+   → Shows Sol's capabilities
 
 3. "Open Notepad"
    → Tests PC control (will ask for approval)
@@ -136,7 +136,7 @@ Try these commands to test Sollie:
 ⚠️ IMPORTANT SAFETY NOTES
 ═══════════════════════════
 
-• Sollie will ALWAYS ask before doing anything
+• Sol will ALWAYS ask before doing anything
 • You must click "Approve" for actions to execute
 • Review the action description before approving
 • All actions are logged (check Settings → View Action Log)
@@ -147,7 +147,7 @@ Try these commands to test Sollie:
 🛠️ TROUBLESHOOTING
 ══════════════════
 
-Problem: "Sollie is not responding"
+Problem: "Sol is not responding"
 Solution: Check if LM Studio server is running
 
 Problem: "GUI won't open"
@@ -159,7 +159,7 @@ Solution:
   2. Go to Local Server tab
   3. Make sure server is started
 
-Problem: "Sollie is too slow"
+Problem: "Sol is too slow"
 Solution: Use a smaller model (7B instead of 13B)
 
 
@@ -180,7 +180,7 @@ Solution: Use a smaller model (7B instead of 13B)
 
 You now have your own private AI assistant!
 
-Enjoy chatting with Sollie! 🤖
+Enjoy chatting with Sol! 🤖
 
 
 ═══════════════════════════════════════════════════════════════

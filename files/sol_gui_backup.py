@@ -1,5 +1,5 @@
 """
-Sollie GUI - Cyberdeck Edition
+Sol GUI - Cyberdeck Edition
 Cyberpunk aesthetic with practical, clean layout
 """
 
@@ -15,7 +15,7 @@ import tkinter as tk
 from tkinter import filedialog
 from datetime import datetime
 import psutil
-from sollie_core import SollieBrain
+from sol_core import SolBrain
 
 # Cyberpunk neon color scheme
 COLORS = {
@@ -49,10 +49,10 @@ FONTS = {
 }
 
 
-class SollieGUI:
+class SolGUI:
     def __init__(self):
-        # Initialize Sollie brain
-        self.brain = SollieBrain()
+        # Initialize Sol brain
+        self.brain = SolBrain()
         self.pending_action = None
         self.pending_actions = []
         self.last_suggestion_time = 0
@@ -82,7 +82,7 @@ class SollieGUI:
         
         # Setup window
         self.window = ctk.CTk()
-        self.window.title("⚡ SOLLIE CYBERDECK ⚡")
+        self.window.title("⚡ Sol CYBERDECK ⚡")
         self.window.geometry("1400x850")
         self.window.minsize(1400, 850)
         self.window.configure(fg_color=COLORS["bg"])
@@ -133,7 +133,7 @@ class SollieGUI:
 
         brand = ctk.CTkLabel(
             sidebar,
-            text="SOLLIE",
+            text="SOL",
             font=FONTS["title"],
             text_color=COLORS["accent"]
         )
@@ -392,7 +392,7 @@ class SollieGUI:
 
         header_title = ctk.CTkLabel(
             title_frame,
-            text="CYBERDECK A9-X // SOLLIE CORE",
+            text="CYBERDECK A9-X // SOL CORE",
             font=FONTS["title"],
             text_color=COLORS["accent"]
         )
@@ -580,7 +580,7 @@ class SollieGUI:
 
         self.input_box = ctk.CTkEntry(
             input_frame,
-            placeholder_text="Type your message to Sollie...",
+            placeholder_text="Type your message to Sol...",
             font=FONTS["body"],
             height=42,
             fg_color=COLORS["panel_alt"],
@@ -641,7 +641,7 @@ class SollieGUI:
         self.show_hud_dock()
 
         # Add welcome message
-        self.add_message("Sollie", "Hello! I'm Sollie, your AI assistant. I'm here to help you with tasks on your PC. What can I do for you today?", "assistant")
+        self.add_message("Sol", "Hello! I'm Sol, your AI assistant. I'm here to help you with tasks on your PC. What can I do for you today?", "assistant")
     
     def add_message(self, sender, message, msg_type="user"):
         """Add a message to the chat display"""
@@ -658,7 +658,7 @@ class SollieGUI:
             self.chat_display.insert("end", prefix, "user_name")
             self.chat_display.insert("end", f"{message}\n", "user_msg")
         elif msg_type == "assistant":
-            prefix = f"\n[{timestamp}] Sollie: "
+            prefix = f"\n[{timestamp}] Sol: "
             self.chat_display.insert("end", prefix, "assistant_name")
             self.insert_markdown(message, "assistant_msg")
             self.chat_display.insert("end", "\n")
@@ -882,7 +882,7 @@ class SollieGUI:
             return
 
         dock = ctk.CTkToplevel(self.window)
-        dock.title("SOLLIE HUD")
+        dock.title("SOL HUD")
         dock.geometry("280x240+18+80")
         dock.configure(fg_color=COLORS["panel"])
         dock.attributes("-topmost", True)
@@ -1232,7 +1232,7 @@ class SollieGUI:
         self.add_message("System", "Copied last response to clipboard.", "system")
 
     def export_chat_history(self):
-        default_name = f"sollie_chat_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
+        default_name = f"sol_chat_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
         file_path = filedialog.asksaveasfilename(
             defaultextension=".txt",
             filetypes=[("Text Files", "*.txt")],
@@ -1320,7 +1320,7 @@ class SollieGUI:
         summary_box.configure(state="disabled")
     
     def send_message(self):
-        """Send user message to Sollie"""
+        """Send user message to Sol"""
         message = self.input_box.get().strip()
         if not message:
             return
@@ -1340,7 +1340,7 @@ class SollieGUI:
         thread.start()
     
     def process_message(self, message):
-        """Process message with Sollie brain"""
+        """Process message with Sol brain"""
         try:
             normalized = message.strip().lower()
             if normalized in ["/stop", "/cancel", "stop task"]:
@@ -1364,12 +1364,12 @@ class SollieGUI:
             self.last_tool_confidence = tool_conf if isinstance(tool_conf, (int, float)) else None
             self.set_connection_status("ONLINE")
             
-            # Display Sollie's response
-            self.add_message("Sollie", result['response'], "assistant")
+            # Display Sol's response
+            self.add_message("Sol", result['response'], "assistant")
 
             follow_up = result.get("follow_up")
             if isinstance(follow_up, str) and follow_up.strip():
-                self.add_message("Sollie", follow_up.strip(), "assistant")
+                self.add_message("Sol", follow_up.strip(), "assistant")
             
             # Check if action needed
             if result['action']:
@@ -1399,7 +1399,7 @@ class SollieGUI:
         if threading.current_thread() is not threading.main_thread():
             self.enqueue_ui(self.show_approval_request, action)
             return
-        self.approval_label.configure(text=f"⚠ Sollie wants to: {action['description']}")
+        self.approval_label.configure(text=f"⚠ Sol wants to: {action['description']}")
         self.approval_frame.grid()
         self.update_queue_status()
     
@@ -1489,9 +1489,9 @@ class SollieGUI:
             return
         plan = self.brain.plan_task(task_text)
 
-        self.add_message("Sollie", plan["plan_text"], "assistant")
+        self.add_message("Sol", plan["plan_text"], "assistant")
         if plan.get("clarifying_questions"):
-            self.add_message("Sollie", "Please answer the questions above.", "assistant")
+            self.add_message("Sol", "Please answer the questions above.", "assistant")
             return
 
         actions = plan.get("actions") or []
@@ -1607,7 +1607,7 @@ class SollieGUI:
                             actions = self.build_suggestion_actions(metrics, config)
                             suggestion = self.build_suggestion(metrics, config)
                             if suggestion:
-                                self.add_message("Sollie", suggestion, "assistant")
+                                self.add_message("Sol", suggestion, "assistant")
 
                             if auto_queue and actions and not self.pending_action and not self.pending_actions:
                                 self.pending_actions = actions
@@ -1621,7 +1621,7 @@ class SollieGUI:
     def show_settings(self):
         """Show settings window"""
         settings_window = ctk.CTkToplevel(self.window)
-        settings_window.title("Sollie Settings")
+        settings_window.title("Sol Settings")
         settings_window.geometry("520x520")
         settings_window.configure(fg_color=COLORS["bg"])
         
@@ -1788,5 +1788,5 @@ class SollieGUI:
 
 
 if __name__ == "__main__":
-    app = SollieGUI()
+    app = SolGUI()
     app.run()
