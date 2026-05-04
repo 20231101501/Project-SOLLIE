@@ -55,3 +55,71 @@ AttributeError: 'font' option forbidden, because would be incompatible with scal
     raise AttributeError("'font' option forbidden, because would be incompatible with scaling")
 AttributeError: 'font' option forbidden, because would be incompatible with scaling
 
+[2026-05-05 00:35:38] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 119, in main
+    app = SollieGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 104, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 117, in setup_ui
+    self.background.lower()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\tkinter\__init__.py", line 3143, in tag_lower
+    self.tk.call((self._w, 'lower') + args)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_tkinter.TclError: wrong # args: should be ".!canvas lower tagOrId ?belowThis?"
+
+[2026-05-05 00:35:48] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 119, in main
+    app = SollieGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 104, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 117, in setup_ui
+    self.background.lower()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\tkinter\__init__.py", line 3143, in tag_lower
+    self.tk.call((self._w, 'lower') + args)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_tkinter.TclError: wrong # args: should be ".!canvas lower tagOrId ?belowThis?"
+
+[2026-05-05 00:35:55] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 119, in main
+    app = SollieGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 104, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 117, in setup_ui
+    self.background.lower()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\tkinter\__init__.py", line 3143, in tag_lower
+    self.tk.call((self._w, 'lower') + args)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_tkinter.TclError: wrong # args: should be ".!canvas lower tagOrId ?belowThis?"
+
+[2026-05-05 00:36:20] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sollie_launcher.py", line 119, in main
+    app = SollieGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 104, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sollie_gui.py", line 117, in setup_ui
+    self.background.lower()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\tkinter\__init__.py", line 3143, in tag_lower
+    self.tk.call((self._w, 'lower') + args)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_tkinter.TclError: wrong # args: should be ".!canvas lower tagOrId ?belowThis?"
+
