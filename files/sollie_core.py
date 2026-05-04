@@ -6,6 +6,7 @@ Connects LM Studio, memory, and PC actions with safety layer
 import requests
 import json
 import re
+import threading
 from pathlib import Path
 from sollie_memory import SollieMemory
 from sollie_actions import SollieActions
@@ -38,11 +39,18 @@ class SollieBrain:
         
         # Get conversation history for context
         history = self.memory.get_conversation_history(limit=10)
+
+        profile = self.memory.get_user_profile()
+        summary = self.memory.get_latest_summary()
         
         # Build messages for LM Studio
         messages = [
             {"role": "system", "content": self.personality}
         ]
+        if summary:
+            messages.append({"role": "system", "content": f"Conversation summary: {summary}"})
+        if profile:
+            messages.append({"role": "system", "content": f"User profile: {json.dumps(profile)}"})
         messages.extend(history)
         
         # Call LM Studio
@@ -51,6 +59,8 @@ class SollieBrain:
             
             # Save assistant response to memory
             self.memory.add_message("assistant", response)
+
+            self.postprocess_memory(user_message, response)
             
             # Detect if response contains action intent
             action = self.detect_action_intent(user_message, response)
@@ -84,6 +94,131 @@ class SollieBrain:
         
         data = response.json()
         return data['choices'][0]['message']['content']
+
+    def call_lm_studio_with_options(self, messages, temperature=None, max_tokens=None):
+        """Call LM Studio with optional overrides"""
+        url = f"{self.lm_studio_url}/chat/completions"
+
+        payload = {
+            "model": self.config['lm_studio']['model'],
+            "messages": messages,
+            "temperature": self.config['lm_studio']['temperature'],
+            "max_tokens": self.config['lm_studio']['max_tokens']
+        }
+
+        if temperature is not None:
+            payload["temperature"] = temperature
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+
+        data = response.json()
+        return data['choices'][0]['message']['content']
+
+    def postprocess_memory(self, user_message, assistant_response):
+        """Run memory extraction/summarization in the background"""
+        memory_config = self.config.get("memory", {})
+        if not memory_config.get("extraction_enabled", True) and not memory_config.get("summary_enabled", True):
+            return
+
+        thread = threading.Thread(
+            target=self._postprocess_memory,
+            args=(user_message, assistant_response),
+            daemon=True
+        )
+        thread.start()
+
+    def _postprocess_memory(self, user_message, assistant_response):
+        memory_config = self.config.get("memory", {})
+
+        if memory_config.get("extraction_enabled", True):
+            self.extract_and_store_user_profile(user_message, assistant_response)
+
+        if memory_config.get("summary_enabled", True):
+            self.summarize_conversations_if_needed()
+
+    def parse_profile_response(self, response_text):
+        """Parse JSON profile extraction response"""
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            pass
+
+        match = re.search(r"\{.*\}", response_text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        return {}
+
+    def extract_and_store_user_profile(self, user_message, assistant_response):
+        """Extract new user facts and update profile"""
+        profile = self.memory.get_user_profile()
+
+        system_prompt = (
+            "You are a precise extraction engine. From the exchange, extract NEW facts "
+            "about the user. Return JSON only with keys: preferences, project_context, "
+            "personal_context, working_patterns, humor_tolerance, goals, other. "
+            "Each value is an array of short strings. If no new facts, return empty arrays."
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Current profile: {json.dumps(profile)}"},
+            {"role": "user", "content": f"User message: {user_message}"},
+            {"role": "assistant", "content": f"Assistant reply: {assistant_response}"}
+        ]
+
+        try:
+            response = self.call_lm_studio_with_options(messages, temperature=0.1, max_tokens=300)
+            updates = self.parse_profile_response(response)
+        except Exception:
+            return
+
+        if not isinstance(updates, dict):
+            return
+
+        self.memory.update_user_profile(updates)
+
+    def summarize_conversations_if_needed(self):
+        """Summarize older conversations and store the summary"""
+        memory_config = self.config.get("memory", {})
+        trigger_count = memory_config.get("summary_trigger_count", 80)
+        keep_last = memory_config.get("summary_keep_last", 20)
+        max_chars = memory_config.get("summary_max_chars", 1200)
+
+        count = self.memory.get_conversation_count()
+        if count <= trigger_count:
+            return
+
+        messages = self.memory.get_messages_for_summary(keep_last=keep_last)
+        if not messages:
+            return
+
+        system_prompt = (
+            "Summarize the conversation in concise bullet points with key decisions, "
+            "topics, and outcomes. Keep it under the requested length."
+        )
+
+        summary_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(messages)}
+        ]
+
+        try:
+            summary = self.call_lm_studio_with_options(summary_messages, temperature=0.2, max_tokens=400)
+        except Exception:
+            return
+
+        if isinstance(summary, str) and max_chars:
+            summary = summary[:max_chars]
+
+        self.memory.add_conversation_summary(summary)
+        self.memory.clear_old_conversations(keep_last=keep_last)
 
     def parse_plan_response(self, response_text):
         """Parse JSON plan response, fall back to a minimal plan"""

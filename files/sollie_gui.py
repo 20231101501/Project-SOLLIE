@@ -732,6 +732,16 @@ class SollieGUI:
             text_color=COLORS["text"]
         )
         log_btn.pack(pady=10)
+
+        history_btn = ctk.CTkButton(
+            settings_window,
+            text="View Chat History",
+            command=self.show_chat_history,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        history_btn.pack(pady=10)
         
         # Clear memory
         clear_btn = ctk.CTkButton(
@@ -771,6 +781,48 @@ class SollieGUI:
         for action in actions:
             status = "✓ Approved" if action['approved'] else "✗ Denied"
             self.add_message("System", f"  {status} - {action['action_type']}: {action['details']}", "system")
+
+    def show_chat_history(self):
+        """Show recent chat history"""
+        history_window = ctk.CTkToplevel(self.window)
+        history_window.title("Chat History")
+        history_window.geometry("700x500")
+        history_window.configure(fg_color=COLORS["bg"])
+
+        ctk.CTkLabel(
+            history_window,
+            text="Chat History",
+            font=FONTS["section"],
+            text_color=COLORS["text"]
+        ).pack(pady=12)
+
+        history_box = ctk.CTkTextbox(
+            history_window,
+            fg_color=COLORS["panel_alt"],
+            text_color=COLORS["text"],
+            font=FONTS["body"],
+            wrap="word"
+        )
+        history_box.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+        messages = self.brain.memory.get_conversation_history_with_timestamps(limit=200)
+        if not messages:
+            history_box.insert("end", "No messages found.")
+        else:
+            for item in messages:
+                timestamp = item.get("timestamp", "")
+                role = item.get("role", "")
+                content = item.get("content", "")
+
+                try:
+                    time_label = datetime.fromisoformat(timestamp).strftime("%H:%M")
+                except Exception:
+                    time_label = "--:--"
+
+                role_label = role.capitalize() if role else "Unknown"
+                history_box.insert("end", f"[{time_label}] {role_label}: {content}\n\n")
+
+        history_box.configure(state="disabled")
     
     def clear_memory(self):
         """Clear conversation history"""
