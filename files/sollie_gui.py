@@ -10,6 +10,8 @@ import os
 import time
 import re
 import json
+import math
+import random
 import tkinter as tk
 from tkinter import filedialog
 from datetime import datetime
@@ -32,7 +34,10 @@ COLORS = {
     "warning": "#f5d14a",
     "danger": "#ff5c70",
     "info": "#7aa2ff",
-    "success": "#4dff9a"
+    "success": "#4dff9a",
+    "scanline": "#0f1821",
+    "scanline_glow": "#0f2a33",
+    "grid": "#101c26"
 }
 
 FONTS = {
@@ -57,6 +62,17 @@ class SollieGUI:
         self.last_assistant_message = ""
         self.connection_status = "UNKNOWN"
         self.config_path = os.path.join(os.path.dirname(__file__), "config.json")
+        self.scanline_y = 0
+        self.scanline_speed = 1
+        self.glow_phase = 0.0
+        self.last_response_seconds = None
+        self.last_tool_confidence = None
+        self.last_gpu_refresh = 0.0
+        self.gpu_name = "N/A"
+        self.gpu_vram_gb = None
+        self.flicker_targets = {}
+        self.current_status_color = COLORS["success"]
+        self.current_connection_color = COLORS["warning"]
 
         agent_config = self.brain.config.get("agent", {})
         monitoring_config = self.brain.config.get("monitoring", {})
@@ -73,6 +89,10 @@ class SollieGUI:
         self.window.geometry("980x720")
         self.window.minsize(980, 720)
         self.window.configure(fg_color=COLORS["bg"])
+        try:
+            self.window.attributes("-alpha", 0.94)
+        except Exception:
+            pass
 
         self.ui_queue = queue.Queue()
         self.window.after(50, self.process_ui_queue)
@@ -87,8 +107,20 @@ class SollieGUI:
     def setup_ui(self):
         """Setup the user interface"""
 
-        # Main container
-        main_frame = ctk.CTkFrame(self.window, fg_color=COLORS["bg"], corner_radius=0)
+        # Cyberdeck background
+        self.background = tk.Canvas(
+            self.window,
+            highlightthickness=0,
+            bg=COLORS["bg"]
+        )
+        self.background.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        # Main container (glass panel)
+        main_frame = ctk.CTkFrame(
+            self.window,
+            fg_color="transparent",
+            corner_radius=0
+        )
         main_frame.pack(fill="both", expand=True)
         main_frame.grid_columnconfigure(1, weight=1)
         main_frame.grid_rowconfigure(0, weight=1)
@@ -97,10 +129,10 @@ class SollieGUI:
         sidebar = ctk.CTkFrame(
             main_frame,
             width=230,
-            fg_color=COLORS["panel"],
+            fg_color=COLORS["panel_alt"],
             corner_radius=18,
             border_width=1,
-            border_color=COLORS["outline"]
+            border_color=COLORS["outline_bright"]
         )
         sidebar.grid(row=0, column=0, sticky="nsw", padx=(12, 6), pady=12)
 
@@ -122,7 +154,7 @@ class SollieGUI:
 
         status_frame = ctk.CTkFrame(
             sidebar,
-            fg_color=COLORS["panel_alt"],
+            fg_color=COLORS["panel"],
             corner_radius=12,
             border_width=1,
             border_color=COLORS["outline"]
@@ -169,7 +201,7 @@ class SollieGUI:
 
         pulse_frame = ctk.CTkFrame(
             sidebar,
-            fg_color=COLORS["panel_alt"],
+            fg_color=COLORS["panel"],
             corner_radius=12,
             border_width=1,
             border_color=COLORS["outline"]
@@ -207,9 +239,46 @@ class SollieGUI:
         self.mem_label, self.mem_bar = metric_row(pulse_frame, "Memory", COLORS["accent_alt"])
         self.disk_label, self.disk_bar = metric_row(pulse_frame, "Disk", COLORS["info"])
 
+        telemetry_frame = ctk.CTkFrame(
+            sidebar,
+            fg_color=COLORS["panel"],
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
+        telemetry_frame.pack(fill="x", padx=14, pady=(0, 10))
+        telemetry_label = ctk.CTkLabel(
+            telemetry_frame,
+            text="Neural Telemetry",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        )
+        telemetry_label.pack(padx=12, pady=(10, 6), anchor="w")
+
+        def telemetry_row(parent, title, value):
+            row = ctk.CTkFrame(parent, fg_color=COLORS["panel_alt"], corner_radius=0)
+            row.pack(fill="x", padx=12, pady=(0, 8))
+            label = ctk.CTkLabel(
+                row,
+                text=f"{title}: {value}",
+                font=FONTS["caption"],
+                text_color=COLORS["text"]
+            )
+            label.pack(anchor="w")
+            return label
+
+        self.telemetry_labels = {
+            "uplink": telemetry_row(telemetry_frame, "Uplink", "UNKNOWN"),
+            "latency": telemetry_row(telemetry_frame, "Latency", "--"),
+            "confidence": telemetry_row(telemetry_frame, "Tool Conf", "--"),
+            "context": telemetry_row(telemetry_frame, "Context", "--"),
+            "gpu": telemetry_row(telemetry_frame, "GPU", "N/A"),
+            "vram": telemetry_row(telemetry_frame, "VRAM", "--")
+        }
+
         deck_frame = ctk.CTkFrame(
             sidebar,
-            fg_color=COLORS["panel_alt"],
+            fg_color=COLORS["panel"],
             corner_radius=12,
             border_width=1,
             border_color=COLORS["outline"]
@@ -267,7 +336,7 @@ class SollieGUI:
 
         queue_frame = ctk.CTkFrame(
             sidebar,
-            fg_color=COLORS["panel_alt"],
+            fg_color=COLORS["panel"],
             corner_radius=12,
             border_width=1,
             border_color=COLORS["outline"]
@@ -304,17 +373,17 @@ class SollieGUI:
         settings_btn.pack(padx=14, pady=(0, 16), fill="x")
 
         # Content
-        content_frame = ctk.CTkFrame(main_frame, fg_color=COLORS["bg"], corner_radius=0)
+        content_frame = ctk.CTkFrame(main_frame, fg_color="transparent", corner_radius=0)
         content_frame.grid(row=0, column=1, sticky="nsew", padx=(6, 12), pady=12)
         content_frame.grid_columnconfigure(0, weight=1)
         content_frame.grid_rowconfigure(2, weight=1)
 
         header_frame = ctk.CTkFrame(
             content_frame,
-            fg_color=COLORS["panel"],
+            fg_color=COLORS["panel_alt"],
             corner_radius=18,
             border_width=1,
-            border_color=COLORS["outline"]
+            border_color=COLORS["outline_bright"]
         )
         header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         header_frame.grid_columnconfigure(0, weight=1)
@@ -335,48 +404,61 @@ class SollieGUI:
         )
         header_sub.grid(row=1, column=0, sticky="w", padx=18, pady=(0, 12))
 
-        accent_bar = ctk.CTkFrame(header_frame, fg_color=COLORS["accent"], corner_radius=0, height=2)
-        accent_bar.grid(row=2, column=0, columnspan=2, sticky="ew", padx=18, pady=(0, 10))
-
         hud_frame = ctk.CTkFrame(header_frame, fg_color=COLORS["panel"], corner_radius=12)
-        hud_frame.grid(row=0, column=1, rowspan=2, sticky="e", padx=18, pady=12)
+        hud_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 8))
+        for idx in range(4):
+            hud_frame.grid_columnconfigure(idx, weight=1)
 
-        def hud_chip(parent, title, value, color):
+        def hud_chip(parent, title, value, color, row, column):
             chip = ctk.CTkFrame(
                 parent,
                 fg_color=COLORS["panel_alt"],
-                corner_radius=12,
+                corner_radius=10,
                 border_width=1,
                 border_color=COLORS["outline"]
             )
-            chip.pack(padx=4, pady=4, fill="x")
-            title_label = ctk.CTkLabel(
+            chip.grid(row=row, column=column, padx=4, pady=3, sticky="ew")
+            label = ctk.CTkLabel(
                 chip,
-                text=title,
+                text=f"{title}: {value}",
                 font=FONTS["caption"],
-                text_color=COLORS["muted"]
-            )
-            title_label.pack(padx=10, pady=(6, 0), anchor="w")
-            value_label = ctk.CTkLabel(
-                chip,
-                text=value,
-                font=FONTS["body_bold"],
                 text_color=color
             )
-            value_label.pack(padx=10, pady=(0, 6), anchor="w")
-            return value_label
+            label.pack(padx=8, pady=6, anchor="w")
+            return label
 
         self.hud_labels = {}
-        self.hud_labels["model"] = hud_chip(hud_frame, "MODEL", self.brain.config.get("lm_studio", {}).get("model", "local"), COLORS["accent"])
-        self.hud_labels["mood"] = hud_chip(hud_frame, "MOOD", "CALM", COLORS["accent_alt"])
-        self.hud_labels["memory"] = hud_chip(hud_frame, "MEMORY", "0 ITEMS", COLORS["info"])
-        self.hud_labels["task"] = hud_chip(hud_frame, "TASK", "ON" if self.task_enabled else "OFF", COLORS["success"] if self.task_enabled else COLORS["danger"])
-        self.hud_labels["lm"] = hud_chip(hud_frame, "LM STUDIO", self.connection_status, COLORS["warning"])
+        self.hud_labels["model"] = hud_chip(
+            hud_frame,
+            "MODEL",
+            self.brain.config.get("lm_studio", {}).get("model", "local"),
+            COLORS["accent"],
+            0,
+            0
+        )
+        self.hud_labels["mood"] = hud_chip(hud_frame, "MOOD", "CALM", COLORS["accent_alt"], 0, 1)
+        self.hud_labels["memory"] = hud_chip(hud_frame, "MEM", "0", COLORS["info"], 0, 2)
+        self.hud_labels["task"] = hud_chip(
+            hud_frame,
+            "TASK",
+            "ON" if self.task_enabled else "OFF",
+            COLORS["success"] if self.task_enabled else COLORS["danger"],
+            0,
+            3
+        )
+        self.hud_labels["lm"] = hud_chip(hud_frame, "LM", self.connection_status, COLORS["warning"], 1, 0)
+        self.hud_labels["temp"] = hud_chip(hud_frame, "TEMP", "0.7", COLORS["accent"], 1, 1)
+        self.hud_labels["tokens"] = hud_chip(hud_frame, "TOK", "500", COLORS["info"], 1, 2)
+        self.hud_labels["endpoint"] = hud_chip(hud_frame, "END", "localhost", COLORS["accent_alt"], 1, 3)
+
+        accent_bar = ctk.CTkFrame(header_frame, fg_color=COLORS["accent"], corner_radius=0, height=2)
+        accent_bar.grid(row=3, column=0, columnspan=2, sticky="ew", padx=18, pady=(0, 10))
+        self.accent_bar = accent_bar
 
         # Action approval frame (hidden by default)
         self.approval_frame = ctk.CTkFrame(
             content_frame,
-            fg_color=COLORS["panel_alt"],
+            fg_color=COLORS["panel"],
             corner_radius=16,
             border_width=1,
             border_color=COLORS["outline_bright"]
@@ -431,7 +513,7 @@ class SollieGUI:
             fg_color=COLORS["panel_alt"],
             corner_radius=18,
             border_width=1,
-            border_color=COLORS["outline"]
+            border_color=COLORS["outline_bright"]
         )
         chat_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
         chat_frame.grid_rowconfigure(0, weight=1)
@@ -455,10 +537,10 @@ class SollieGUI:
         # Input area
         input_frame = ctk.CTkFrame(
             content_frame,
-            fg_color=COLORS["panel"],
+            fg_color=COLORS["panel_alt"],
             corner_radius=18,
             border_width=1,
-            border_color=COLORS["outline"]
+            border_color=COLORS["outline_bright"]
         )
         input_frame.grid(row=3, column=0, sticky="ew")
         input_frame.grid_columnconfigure(0, weight=1)
@@ -518,8 +600,12 @@ class SollieGUI:
         
         self.update_queue_status()
         self.set_connection_status(self.connection_status)
+        self.refresh_gpu_info()
         self.refresh_hud()
         self.update_system_pulse()
+        self.animate_cyberdeck()
+        self.animate_flicker()
+        self.show_hud_dock()
 
         # Add welcome message
         self.add_message("Sollie", "Hello! I'm Sollie, your AI assistant. I'm here to help you with tasks on your PC. What can I do for you today?", "assistant")
@@ -552,6 +638,12 @@ class SollieGUI:
             self.chat_display.insert("end", f"\n[{timestamp}] ⚡ ACTION: ", "action_name")
             self.insert_markdown(message, "action_msg")
             self.chat_display.insert("end", "\n")
+
+        if hasattr(self, "hud_dock_status"):
+            try:
+                self.hud_dock_status.configure(text=self.status_label.cget("text"), text_color=self.current_status_color)
+            except Exception:
+                pass
         
         self.chat_display.configure(state="disabled")
         self.chat_display.see("end")
@@ -640,7 +732,9 @@ class SollieGUI:
         if threading.current_thread() is not threading.main_thread():
             self.enqueue_ui(self.set_status, text, color)
             return
+        self.current_status_color = color
         self.status_label.configure(text=text, text_color=color)
+        self.refresh_flicker_targets()
 
     def enqueue_ui(self, func, *args, **kwargs):
         self.ui_queue.put((func, args, kwargs))
@@ -659,12 +753,227 @@ class SollieGUI:
 
         self.window.after(50, self.process_ui_queue)
 
+    def draw_cyberdeck_background(self):
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        if width <= 1 or height <= 1:
+            return
+
+        self.background.delete("all")
+
+        # Base gradient blocks
+        self.background.create_rectangle(0, 0, width, height, fill=COLORS["bg"], outline="")
+
+        # Grid pattern
+        grid_size = 40
+        for x in range(0, width, grid_size):
+            self.background.create_line(x, 0, x, height, fill=COLORS["grid"])
+        for y in range(0, height, grid_size):
+            self.background.create_line(0, y, width, y, fill=COLORS["grid"])
+
+        # Glass panel silhouettes
+        left_x1, left_y1 = 8, 70
+        left_x2, left_y2 = 252, height - 18
+        right_x1, right_y1 = 264, 70
+        right_x2, right_y2 = width - 18, height - 18
+        self.background.create_rectangle(
+            left_x1,
+            left_y1,
+            left_x2,
+            left_y2,
+            fill=COLORS["panel"],
+            outline=COLORS["outline_bright"]
+        )
+        self.background.create_rectangle(
+            right_x1,
+            right_y1,
+            right_x2,
+            right_y2,
+            fill=COLORS["panel_alt"],
+            outline=COLORS["outline"]
+        )
+        self.background.create_line(left_x1, left_y1, left_x1 + 120, left_y1, fill=COLORS["accent"])
+        self.background.create_line(right_x1, right_y1, right_x1 + 160, right_y1, fill=COLORS["accent_alt"])
+
+        # Neon header strip
+        self.background.create_rectangle(0, 0, width, 48, fill=COLORS["scanline_glow"], outline="")
+        self.background.create_rectangle(0, 48, width, 50, fill=COLORS["accent"], outline="")
+
+        # Scanline
+        self.background.create_rectangle(
+            0,
+            self.scanline_y,
+            width,
+            self.scanline_y + 12,
+            fill=COLORS["scanline"],
+            outline=""
+        )
+
+    def animate_cyberdeck(self):
+        height = max(1, self.window.winfo_height())
+        self.scanline_y = (self.scanline_y + self.scanline_speed) % (height + 20)
+        self.glow_phase += 0.08
+
+        glow = 0.5 + 0.5 * math.sin(self.glow_phase)
+        accent = COLORS["accent"]
+        alt = COLORS["accent_alt"]
+
+        if self.current_status_color == COLORS["success"]:
+            glow_color = accent if glow > 0.5 else alt
+            try:
+                self.status_label.configure(text_color=glow_color)
+            except Exception:
+                pass
+
+        try:
+            if glow > 0.5:
+                self.accent_bar.configure(fg_color=COLORS["accent"])
+            else:
+                self.accent_bar.configure(fg_color=COLORS["accent_alt"])
+        except Exception:
+            pass
+
+        self.draw_cyberdeck_background()
+        self.window.after(50, self.animate_cyberdeck)
+
+    def create_hud_dock(self):
+        if self.hud_dock and self.hud_dock.winfo_exists():
+            return
+
+        dock = ctk.CTkToplevel(self.window)
+        dock.title("SOLLIE HUD")
+        dock.geometry("280x240+18+80")
+        dock.configure(fg_color=COLORS["panel"])
+        dock.attributes("-topmost", True)
+        dock.protocol("WM_DELETE_WINDOW", self.hide_hud_dock)
+        self.hud_dock = dock
+
+        header = ctk.CTkFrame(dock, fg_color=COLORS["panel_alt"], corner_radius=12)
+        header.pack(fill="x", padx=10, pady=10)
+        ctk.CTkLabel(
+            header,
+            text="CYBER HUD",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        ).pack(padx=10, pady=(8, 0), anchor="w")
+        self.hud_dock_status = ctk.CTkLabel(
+            header,
+            text="READY",
+            font=FONTS["caption"],
+            text_color=COLORS["success"]
+        )
+        self.hud_dock_status.pack(padx=10, pady=(0, 8), anchor="w")
+
+        dock_body = ctk.CTkFrame(dock, fg_color=COLORS["panel_alt"], corner_radius=12)
+        dock_body.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        def dock_row(title, value):
+            row = ctk.CTkFrame(dock_body, fg_color=COLORS["panel"], corner_radius=8)
+            row.pack(fill="x", padx=10, pady=(8, 0))
+            label = ctk.CTkLabel(
+                row,
+                text=f"{title}: {value}",
+                font=FONTS["caption"],
+                text_color=COLORS["text"]
+            )
+            label.pack(padx=8, pady=6, anchor="w")
+            return label
+
+        self.hud_dock_labels = {
+            "model": dock_row("Model", "local"),
+            "task": dock_row("Task", "OFF"),
+            "queue": dock_row("Queue", "0"),
+            "latency": dock_row("Latency", "--"),
+            "gpu": dock_row("GPU", "N/A")
+        }
+
+        self.refresh_flicker_targets()
+
+    def show_hud_dock(self):
+        if not hasattr(self, "hud_dock"):
+            self.hud_dock = None
+        self.create_hud_dock()
+        try:
+            self.hud_dock.deiconify()
+        except Exception:
+            pass
+
+    def hide_hud_dock(self):
+        if self.hud_dock and self.hud_dock.winfo_exists():
+            self.hud_dock.withdraw()
+
+    def toggle_hud_dock(self):
+        if self.hud_dock and self.hud_dock.winfo_exists() and self.hud_dock.winfo_viewable():
+            self.hide_hud_dock()
+        else:
+            self.show_hud_dock()
+
     def save_config(self):
         try:
             with open(self.config_path, "w", encoding="utf-8") as handle:
                 json.dump(self.brain.config, handle, ensure_ascii=True, indent=2)
         except Exception as e:
             self.add_message("System", f"Config save failed: {str(e)}", "system")
+
+    def refresh_flicker_targets(self):
+        targets = {}
+        if hasattr(self, "status_label"):
+            targets[self.status_label] = self.current_status_color
+        if hasattr(self, "connection_label"):
+            targets[self.connection_label] = self.current_connection_color
+
+        if hasattr(self, "hud_labels"):
+            for key, label in self.hud_labels.items():
+                base = COLORS["text"]
+                if key == "model":
+                    base = COLORS["accent"]
+                elif key == "mood":
+                    base = COLORS["accent_alt"]
+                elif key == "memory":
+                    base = COLORS["info"]
+                elif key == "task":
+                    base = COLORS["success"] if self.task_enabled else COLORS["danger"]
+                elif key == "lm":
+                    base = self.current_connection_color
+                elif key == "temp":
+                    base = COLORS["accent"]
+                elif key == "tokens":
+                    base = COLORS["info"]
+                elif key == "endpoint":
+                    base = COLORS["accent_alt"]
+                targets[label] = base
+
+        if hasattr(self, "telemetry_labels"):
+            for label in self.telemetry_labels.values():
+                targets[label] = COLORS["text"]
+
+        if hasattr(self, "hud_dock_labels"):
+            for label in self.hud_dock_labels.values():
+                targets[label] = COLORS["text"]
+        if hasattr(self, "hud_dock_status"):
+            targets[self.hud_dock_status] = self.current_status_color
+
+        self.flicker_targets = targets
+
+    def animate_flicker(self):
+        if not self.flicker_targets:
+            self.refresh_flicker_targets()
+
+        for label, color in self.flicker_targets.items():
+            try:
+                label.configure(text_color=color)
+            except Exception:
+                continue
+
+        if random.random() < 0.22:
+            count = min(len(self.flicker_targets), random.randint(1, 4))
+            for label in random.sample(list(self.flicker_targets.keys()), count):
+                try:
+                    label.configure(text_color=COLORS["muted"])
+                except Exception:
+                    pass
+
+        self.window.after(120, self.animate_flicker)
 
     def update_hud_fields(self):
         if threading.current_thread() is not threading.main_thread():
@@ -678,6 +987,15 @@ class SollieGUI:
         memory_count = len(memory_items) if memory_items else 0
 
         model_name = self.brain.config.get("lm_studio", {}).get("model", "local")
+        lm_config = self.brain.config.get("lm_studio", {})
+        temperature = lm_config.get("temperature", 0.7)
+        max_tokens = lm_config.get("max_tokens", 0)
+        endpoint = lm_config.get("api_url", "")
+        if isinstance(endpoint, str) and endpoint:
+            endpoint = endpoint.replace("http://", "").replace("https://", "")
+            endpoint = endpoint.split("/")[0]
+        else:
+            endpoint = "local"
         task_state = "ON" if self.task_enabled else "OFF"
         task_color = COLORS["success"] if self.task_enabled else COLORS["danger"]
 
@@ -689,11 +1007,50 @@ class SollieGUI:
         else:
             lm_color = COLORS["warning"]
 
-        self.hud_labels["model"].configure(text=model_name)
-        self.hud_labels["mood"].configure(text=mood_label)
-        self.hud_labels["memory"].configure(text=f"{memory_count} ITEMS")
-        self.hud_labels["task"].configure(text=task_state, text_color=task_color)
-        self.hud_labels["lm"].configure(text=lm_status, text_color=lm_color)
+        self.hud_labels["model"].configure(text=f"MODEL: {model_name}")
+        self.hud_labels["mood"].configure(text=f"MOOD: {mood_label}")
+        self.hud_labels["memory"].configure(text=f"MEM: {memory_count}")
+        self.hud_labels["task"].configure(text=f"TASK: {task_state}", text_color=task_color)
+        self.hud_labels["lm"].configure(text=f"LM: {lm_status}", text_color=lm_color)
+        self.hud_labels["temp"].configure(text=f"TEMP: {temperature}")
+        self.hud_labels["tokens"].configure(text=f"TOK: {max_tokens}")
+        self.hud_labels["endpoint"].configure(text=f"END: {endpoint}")
+
+        latency = "--"
+        if isinstance(self.last_response_seconds, (int, float)):
+            latency = f"{self.last_response_seconds:.2f}s"
+
+        confidence = "--"
+        if isinstance(self.last_tool_confidence, (int, float)):
+            confidence = f"{self.last_tool_confidence * 100:.0f}%"
+
+        context_count = self.brain.memory.get_conversation_count()
+        rag_enabled = self.brain.config.get("memory", {}).get("rag_enabled", True)
+        rag_label = "ON" if rag_enabled else "OFF"
+        vram_label = "--"
+        if isinstance(self.gpu_vram_gb, (int, float)):
+            vram_label = f"{self.gpu_vram_gb} GB"
+
+        if hasattr(self, "telemetry_labels"):
+            self.telemetry_labels["uplink"].configure(text=f"Uplink: {lm_status}")
+            self.telemetry_labels["latency"].configure(text=f"Latency: {latency}")
+            self.telemetry_labels["confidence"].configure(text=f"Tool Conf: {confidence}")
+            self.telemetry_labels["context"].configure(text=f"Context: {context_count} | RAG {rag_label}")
+            self.telemetry_labels["gpu"].configure(text=f"GPU: {self.gpu_name}")
+            self.telemetry_labels["vram"].configure(text=f"VRAM: {vram_label}")
+
+        if hasattr(self, "hud_dock_labels"):
+            queue_total = (1 if self.pending_action else 0) + len(self.pending_actions)
+            self.hud_dock_labels["model"].configure(text=f"Model: {model_name}")
+            self.hud_dock_labels["task"].configure(text=f"Task: {task_state}")
+            self.hud_dock_labels["queue"].configure(text=f"Queue: {queue_total}")
+            self.hud_dock_labels["latency"].configure(text=f"Latency: {latency}")
+            self.hud_dock_labels["gpu"].configure(text=f"GPU: {self.gpu_name}")
+
+        if hasattr(self, "hud_dock_status"):
+            self.hud_dock_status.configure(text=self.status_label.cget("text"), text_color=self.current_status_color)
+
+        self.refresh_flicker_targets()
 
     def refresh_hud(self):
         self.update_hud_fields()
@@ -731,6 +1088,11 @@ class SollieGUI:
         memory = metrics.get("memory_percent", 0.0)
         disk = metrics.get("disk_percent", 0.0)
 
+        now = time.monotonic()
+        if now - self.last_gpu_refresh >= 30:
+            self.refresh_gpu_info()
+            self.last_gpu_refresh = now
+
         self.cpu_label.configure(text=f"CPU: {cpu:.0f}%")
         self.cpu_bar.set(min(max(cpu / 100.0, 0.0), 1.0))
 
@@ -741,6 +1103,41 @@ class SollieGUI:
         self.disk_bar.set(min(max(disk / 100.0, 0.0), 1.0))
 
         self.window.after(2000, self.update_system_pulse)
+
+    def refresh_gpu_info(self):
+        self.gpu_name = "N/A"
+        self.gpu_vram_gb = None
+
+        if os.name != "nt":
+            return
+
+        try:
+            import win32com.client
+        except Exception:
+            return
+
+        try:
+            wmi = win32com.client.GetObject("winmgmts:")
+            adapters = wmi.InstancesOf("Win32_VideoController")
+        except Exception:
+            return
+
+        best = None
+        for adapter in adapters:
+            name = getattr(adapter, "Name", None)
+            ram = getattr(adapter, "AdapterRAM", None)
+            if name:
+                best = (name, ram)
+                if ram:
+                    break
+
+        if best:
+            self.gpu_name = best[0]
+            try:
+                if best[1]:
+                    self.gpu_vram_gb = round(int(best[1]) / (1024 ** 3), 1)
+            except Exception:
+                self.gpu_vram_gb = None
 
     def set_connection_status(self, status):
         if threading.current_thread() is not threading.main_thread():
@@ -755,8 +1152,10 @@ class SollieGUI:
         else:
             color = COLORS["warning"]
 
+        self.current_connection_color = color
         self.connection_label.configure(text=f"LM: {self.connection_status}", text_color=color)
         self.update_hud_fields()
+        self.refresh_flicker_targets()
 
     def toggle_task_mode(self):
         self.task_enabled = bool(self.task_var.get())
@@ -919,7 +1318,12 @@ class SollieGUI:
                 self.set_status("READY", COLORS["success"])
                 return
 
+            start_time = time.monotonic()
             result = self.brain.chat(message)
+            self.last_response_seconds = time.monotonic() - start_time
+            tool_conf = result.get("tool_confidence")
+            self.last_tool_confidence = tool_conf if isinstance(tool_conf, (int, float)) else None
+            self.set_connection_status("ONLINE")
             
             # Display Sollie's response
             self.add_message("Sollie", result['response'], "assistant")
@@ -944,6 +1348,7 @@ class SollieGUI:
         except Exception as e:
             self.add_message("System", f"Error: {str(e)}", "system")
             self.set_status("ERROR", COLORS["danger"])
+            self.set_connection_status("OFFLINE")
 
     def send_quick_message(self, message):
         self.input_box.delete(0, "end")
@@ -1239,6 +1644,16 @@ class SollieGUI:
             text_color=COLORS["text"]
         )
         export_btn.pack(pady=10)
+
+        dock_btn = ctk.CTkButton(
+            settings_window,
+            text="Toggle HUD Dock",
+            command=self.toggle_hud_dock,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        dock_btn.pack(pady=10)
         
         # Clear memory
         clear_btn = ctk.CTkButton(
