@@ -307,7 +307,7 @@ In LM Studio, try these models:
 ❌ Access blocked directories
 
 ### Action Logging
-Every action is logged in `sollie_memory.db`
+Every action is logged in `sollie_memory.json`
 - View in Settings → "View Action Log"
 - See what Sollie tried to do
 - Review approved/denied actions

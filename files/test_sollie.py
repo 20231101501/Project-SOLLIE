@@ -258,7 +258,7 @@ def test_memory():
         from sollie_memory import SollieMemory
         
         # Create test database
-        memory = SollieMemory("test_memory.db")
+        memory = SollieMemory("test_memory.json")
         print("✓ Memory system initialized")
         
         # Test adding a message
@@ -273,7 +273,8 @@ def test_memory():
             print("✗ Message retrieval failed")
         
         # Clean up
-        Path("test_memory.db").unlink()
+        if Path("test_memory.json").exists():
+            Path("test_memory.json").unlink()
         print("\n✓ Memory system working")
         return True
     
