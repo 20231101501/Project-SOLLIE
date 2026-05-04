@@ -24,7 +24,7 @@
       "valence": 0.0,
       "energy": 0.5
     },
-    "mood_decay": 0.1499999999999999,
+    "mood_decay": 0.25,
     "curiosity_enabled": 1,
     "curiosity_threshold": 0.6,
     "curiosity_short_word_count": 8

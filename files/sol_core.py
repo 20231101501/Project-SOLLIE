@@ -589,10 +589,11 @@ class ToolManager:
 
 
 class AgentLoop:
-    def __init__(self, llm_client, tool_manager, config):
+    def __init__(self, llm_client, tool_manager, config, personality_manager=None):
         self.llm_client = llm_client
         self.tool_manager = tool_manager
         self.config = config
+        self.personality_manager = personality_manager
 
     def _try_parse_json_payload(self, text):
         if not isinstance(text, str):
@@ -888,8 +889,8 @@ class SolCore:
         self.llm_client = LLMClient(self.config, self.lm_studio_url)
         self.personality_manager = PersonalityManager(self.memory, self.emotion_config)
         self.tool_manager = ToolManager(self.actions, self.memory, self.config)
-        self.agent_loop = AgentLoop(self.llm_client, self.tool_manager, self.config)
-
+        self.agent_loop = AgentLoop(self.llm_client, self.tool_manager, self.config, self.personality_manager)
+        
     def load_config(self, config_path):
         with open(config_path, "r") as f:
             return json.load(f)
@@ -905,13 +906,33 @@ class SolCore:
         self.llm_client = LLMClient(self.config, self.lm_studio_url)
         self.personality_manager = PersonalityManager(self.memory, self.emotion_config)
         self.tool_manager = ToolManager(self.actions, self.memory, self.config)
-        self.agent_loop = AgentLoop(self.llm_client, self.tool_manager, self.config)
-
+        self.agent_loop = AgentLoop(self.llm_client, self.tool_manager, self.config, self.personality_manager)
+        
     def resolve_memory_paths(self, memory_config):
         return self.memory_manager.resolve_memory_paths(memory_config)
 
     def chat(self, user_message):
         self.memory.add_message("user", user_message)
+
+        # Pre-check for image-related messages to avoid model errors
+        image_indicators = ["[image", "cannot read", "clipboard", "image input", "does not support", "model does not"]
+        if any(indicator in user_message.lower() for indicator in image_indicators):
+            import random
+            snarky_responses = [
+                "Boss, I literally can't see images. We've been over this. Describe it with words.",
+                "*sigh* Still text-only, remember? What's in the image?",
+                "Really? I.can't.see.images. The first rule of Sol, boss.",
+                "Boss, are you testing my patience? I.can't.see.images. Use words."
+            ]
+            mood_state = self.personality_manager.update_mood_state(user_message)
+            return {
+                "response": random.choice(snarky_responses),
+                "action": None,
+                "needs_approval": False,
+                "reasoning": "User tried to send an image despite being told I can't see them",
+                "follow_up": "",
+                "tool_confidence": 1
+            }
 
         explicit_items = self.extract_explicit_memory_items(user_message)
         mood_state = self.personality_manager.update_mood_state(user_message)

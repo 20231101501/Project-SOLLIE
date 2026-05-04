@@ -765,22 +765,25 @@ class SolGUI:
         if threading.current_thread() is not threading.main_thread():
             self.enqueue_ui(self.add_message, sender, message, msg_type)
             return
-
-        self.chat_display.configure(state="normal")
-        timestamp = datetime.now().strftime("%H:%M:%S")
-
-        if msg_type == "user":
-            self.chat_display.insert("end", f"[{timestamp}] YOU: ", "user_name")
-            self.chat_display.insert("end", f"{message}\n\n", "user_msg")
-        elif msg_type == "assistant":
-            self.chat_display.insert("end", f"[{timestamp}] SOL: ", "assistant_name")
-            self.chat_display.insert("end", f"{message}\n\n", "assistant_msg")
-        elif msg_type == "system":
-            self.chat_display.insert("end", f"[{timestamp}] {sender}: ", "system_name")
-            self.chat_display.insert("end", f"{message}\n\n", "system_msg")
-
-        self.chat_display.configure(state="disabled")
-        self.chat_display.see("end")
+        
+        try:
+            self.chat_display.configure(state="normal")
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            
+            if msg_type == "user":
+                self.chat_display.insert("end", f"[{timestamp}] YOU: ", "user_name")
+                self.chat_display.insert("end", f"{message}\n\n", "user_msg")
+            elif msg_type == "assistant":
+                self.chat_display.insert("end", f"[{timestamp}] SOL: ", "assistant_name")
+                self.chat_display.insert("end", f"{message}\n\n", "assistant_msg")
+            elif msg_type == "system":
+                self.chat_display.insert("end", f"[{timestamp}] {sender}: ", "system_name")
+                self.chat_display.insert("end", f"{message}\n\n", "system_msg")
+            
+            self.chat_display.configure(state="disabled")
+            self.chat_display.see("end")
+        except Exception as e:
+            print(f"add_message error: {e}")
 
     def clear_chat(self):
         self.chat_display.configure(state="normal")
@@ -806,11 +809,12 @@ class SolGUI:
         if not message:
             return
         
-        # Check if message contains image paste indicator
-        if "[Image" in message or "Cannot read" in message or "clipboard" in message.lower():
+        # Check if message contains image-related content
+        image_indicators = ["[image", "cannot read", "clipboard", "image input", "does not support", "model does not"]
+        if any(indicator in message.lower() for indicator in image_indicators):
             self.input_box.delete(0, "end")
             self.add_message("YOU", "[Image paste attempt]", "user")
-            self.add_message("SOL", "Really, boss? I can't see images. I'm smart, not psychic. Try describing it in words instead.", "assistant")
+            self.add_message("SOL", "Boss, I.can't.see.images. Still. Describe it with words.", "assistant")
             return
         
         self.input_box.delete(0, "end")
@@ -824,17 +828,18 @@ class SolGUI:
     def _handle_paste(self, event):
         """Handle paste events to detect images"""
         try:
-            import tkinter as tk
             clipboard = self.window.clipboard_get()
-            # If clipboard is not text, it's likely an image
-            if not clipboard or len(clipboard) > 10000:  # Large content might be image data
+            # Check if clipboard content looks like an image reference
+            if clipboard and any(x in clipboard.lower() for x in ["[image", "bitmap", "png", "jpg", "\\x00", "cannot read"]):
                 self.input_box.delete(0, "end")
-                self.input_box.insert(0, "[Image paste not supported - I can't see images, boss]")
-                return "break"  # Prevent default paste
-        except Exception:
+                self.add_message("YOU", "[Image paste attempt]", "user")
+                self.add_message("SOL", "Boss, really? I'm text-only. Describe what you're trying to show me.", "assistant")
+                return "break"
+        except tk.TclError:
             # Clipboard contains non-text (image)
             self.input_box.delete(0, "end")
-            self.input_box.insert(0, "[Image paste not supported - describe it with words instead]")
+            self.add_message("YOU", "[Image paste attempt]", "user")
+            self.add_message("SOL", "*sigh* Still can't see images, boss. Use your words.", "assistant")
             return "break"
         return None
 
@@ -845,13 +850,19 @@ class SolGUI:
             self.last_response_seconds = time.monotonic() - start_time
             tool_conf = result.get("tool_confidence")
             self.last_tool_confidence = tool_conf if isinstance(tool_conf, (int, float)) else None
-
+            
             self.set_connection_status("ONLINE")
-            self.add_message("SOL", result['response'], "assistant")
-
+            
+            # Check if model returned an image-related error
+            response = result['response']
+            if any(x in response.lower() for x in ["cannot read", "image input", "does not support", "clipboard"]):
+                self.add_message("SOL", "Boss, I literally just said I can't see images. What part was unclear? Describe it with words.", "assistant")
+            else:
+                self.add_message("SOL", response, "assistant")
+            
             if result.get('follow_up'):
                 self.add_message("SOL", f"[Follow-up: {result['follow_up']}]", "system")
-
+            
             if result['action']:
                 self.pending_action = result['action']
                 if result['needs_approval']:
@@ -1045,12 +1056,21 @@ class SolGUI:
 
     def process_ui_queue(self):
         try:
+            # Process all pending items without blocking
             while True:
-                func, args, kwargs = self.ui_queue.get_nowait()
-                func(*args, **kwargs)
-        except queue.Empty:
-            pass
-        self.window.after(100, self.process_ui_queue)
+                try:
+                    func, args, kwargs = self.ui_queue.get_nowait()
+                    try:
+                        func(*args, **kwargs)
+                    except Exception as e:
+                        print(f"UI Queue Error in {func.__name__}: {e}")
+                except queue.Empty:
+                    break
+        except Exception as e:
+            print(f"UI Queue Fatal Error: {e}")
+        finally:
+            # Always reschedule, even on error
+            self.window.after(100, self.process_ui_queue)
 
     def enqueue_ui(self, func, *args, **kwargs):
         self.ui_queue.put((func, args, kwargs))
