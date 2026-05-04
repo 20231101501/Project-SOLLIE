@@ -230,7 +230,7 @@ A: Absolutely! Edit config.json → "personality" field
 
 Q: What if something goes wrong?
 A: Check Settings → View Action Log to see what happened.
-   Worst case: delete sollie_memory.db and restart fresh.
+  Worst case: delete sollie_memory.json and restart fresh.
 
 
 ═══════════════════════════════════════════════════════════════

@@ -15,16 +15,44 @@ from sollie_actions import SollieActions
 class SollieBrain:
     def __init__(self, config_path="config.json"):
         self.config = self.load_config(config_path)
-        self.memory = SollieMemory(self.config['memory']['database_path'])
+        memory_config = self.config.get("memory", {})
+        storage_path, legacy_db_path = self.resolve_memory_paths(memory_config)
+        self.memory = SollieMemory(storage_path, legacy_db_path=legacy_db_path)
         self.actions = SollieActions(config_path)
         self.lm_studio_url = self.config['lm_studio']['api_url']
         self.personality = self.config['sollie']['personality']
         self.approval_required = self.config['sollie']['approval_required']
+        self.emotion_config = self.config.get("emotion", {})
     
     def load_config(self, config_path):
         """Load configuration"""
         with open(config_path, 'r') as f:
             return json.load(f)
+
+    def resolve_memory_paths(self, memory_config):
+        storage_path = memory_config.get("storage_path")
+        database_path = memory_config.get("database_path")
+        legacy_db_path = None
+
+        if storage_path:
+            if str(storage_path).lower().endswith(".db"):
+                legacy_db_path = storage_path
+                storage_path = str(Path(storage_path).with_suffix(".json"))
+        elif database_path:
+            if str(database_path).lower().endswith(".db"):
+                legacy_db_path = database_path
+                storage_path = str(Path(database_path).with_suffix(".json"))
+            else:
+                storage_path = database_path
+        else:
+            storage_path = "sollie_memory.json"
+
+        if legacy_db_path is None:
+            default_db = Path("sollie_memory.db")
+            if default_db.exists() and not Path(storage_path).exists():
+                legacy_db_path = str(default_db)
+
+        return storage_path, legacy_db_path
     
     def chat(self, user_message):
         """
@@ -36,21 +64,41 @@ class SollieBrain:
         """
         # Save user message to memory
         self.memory.add_message("user", user_message)
+
+        explicit_items = self.extract_explicit_memory_items(user_message)
+        mood_state = self.update_mood_state(user_message)
+        curiosity_active = self.should_trigger_curiosity(user_message, explicit_items)
         
         # Get conversation history for context
         history = self.memory.get_conversation_history(limit=10)
 
         profile = self.memory.get_user_profile()
         summary = self.memory.get_latest_summary()
+        memory_config = self.config.get("memory", {})
+        memory_limit = memory_config.get("user_memory_limit", 50)
+        user_memory = self.memory.get_user_memory(limit=memory_limit, include_meta=True)
+        memory_insight = self.build_memory_insight(user_message, user_memory, explicit_items)
         
         # Build messages for LM Studio
         messages = [
             {"role": "system", "content": self.personality}
         ]
+        mood_prompt = self.get_mood_prompt(mood_state)
+        if mood_prompt:
+            messages.append({"role": "system", "content": mood_prompt})
+        if curiosity_active:
+            messages.append({
+                "role": "system",
+                "content": "Curiosity mode: ask one short, friendly follow-up question to learn more or clarify. Ask at most one question."
+            })
         if summary:
             messages.append({"role": "system", "content": f"Conversation summary: {summary}"})
         if profile:
             messages.append({"role": "system", "content": f"User profile: {json.dumps(profile)}"})
+        if memory_insight:
+            messages.append({"role": "system", "content": f"Relevant memory insight: {memory_insight}"})
+        if explicit_items:
+            messages.append({"role": "system", "content": "The user provided explicit memory items. Acknowledge briefly that they were saved."})
         messages.extend(history)
         
         # Call LM Studio
@@ -117,10 +165,402 @@ class SollieBrain:
         data = response.json()
         return data['choices'][0]['message']['content']
 
+    def extract_explicit_memory_items(self, user_message):
+        """Extract and store explicit memory items from user messages"""
+        payload = self.try_parse_json_payload(user_message)
+        items = self.normalize_memory_items(payload)
+        if items:
+            self.memory.add_memory_items(items, source="explicit")
+        return items
+
+    def try_parse_json_payload(self, text):
+        """Try to parse a JSON object or array from a message"""
+        if not isinstance(text, str):
+            return None
+
+        stripped = text.strip()
+        if not stripped:
+            return None
+
+        if stripped.startswith("{") or stripped.startswith("["):
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError:
+                pass
+
+        match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
+        if match:
+            snippet = match.group(1)
+            try:
+                return json.loads(snippet)
+            except json.JSONDecodeError:
+                return None
+
+        return None
+
+    def normalize_memory_items(self, payload):
+        """Normalize JSON payloads into memory items"""
+        if isinstance(payload, dict):
+            candidates = [payload]
+        elif isinstance(payload, list):
+            candidates = payload
+        else:
+            return []
+
+        items = []
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            memory_type = item.get("type")
+            value = item.get("value")
+            if isinstance(memory_type, str) and isinstance(value, str):
+                memory_type = memory_type.strip()
+                value = value.strip()
+                if memory_type and value:
+                    items.append({"type": memory_type, "value": value})
+
+        return items
+
+    def parse_memory_items_response(self, response_text):
+        """Parse a memory extraction response into memory items"""
+        payload = self.try_parse_json_payload(response_text)
+        return self.normalize_memory_items(payload)
+
+    def strip_memory_items(self, memory_items):
+        """Reduce memory items to type/value pairs for prompts"""
+        cleaned = []
+        for item in memory_items or []:
+            if not isinstance(item, dict):
+                continue
+            memory_type = item.get("type")
+            value = item.get("value")
+            if isinstance(memory_type, str) and isinstance(value, str):
+                memory_type = memory_type.strip()
+                value = value.strip()
+                if memory_type and value:
+                    cleaned.append({"type": memory_type, "value": value})
+        return cleaned
+
+    def build_memory_insight(self, user_message, user_memory, explicit_items):
+        memory_config = self.config.get("memory", {})
+        if not memory_config.get("rag_enabled", True):
+            return ""
+        if explicit_items:
+            return ""
+        if not user_memory:
+            return ""
+
+        top_k = int(memory_config.get("rag_top_k", 5))
+        min_score = self.safe_float(memory_config.get("rag_min_score", 0.12), 0.12)
+
+        relevant = self.rank_memory_items(user_message, user_memory, top_k, min_score)
+        if not relevant:
+            return ""
+
+        self.memory.mark_memory_used(relevant)
+        stripped = self.strip_memory_items(relevant)
+        if not stripped:
+            return ""
+
+        if memory_config.get("interpretation_enabled", True):
+            interpreted = self.interpret_memory_items(user_message, stripped)
+            if interpreted:
+                return interpreted
+
+        return self.summarize_memory_locally(stripped)
+
+    def interpret_memory_items(self, user_message, memory_items):
+        memory_config = self.config.get("memory", {})
+        max_tokens = int(memory_config.get("interpretation_max_tokens", 180))
+
+        memory_items = self.strip_memory_items(memory_items)
+        if not memory_items:
+            return ""
+
+        system_prompt = (
+            "You are a memory interpreter. Given the user's message and memory items, "
+            "produce a short, helpful memory insight that will improve the assistant's response. "
+            "Do not list raw items. Merge and paraphrase. Keep it to 1-3 short sentences."
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"User message: {user_message}"},
+            {"role": "user", "content": f"Memory items: {json.dumps(memory_items)}"}
+        ]
+
+        try:
+            response = self.call_lm_studio_with_options(messages, temperature=0.2, max_tokens=max_tokens)
+        except Exception:
+            return ""
+
+        if not isinstance(response, str):
+            return ""
+
+        return response.strip()
+
+    def summarize_memory_locally(self, memory_items):
+        if not memory_items:
+            return ""
+
+        grouped = {}
+        for item in memory_items:
+            memory_type = item.get("type", "other")
+            value = item.get("value")
+            if not isinstance(value, str) or not value.strip():
+                continue
+            grouped.setdefault(memory_type, []).append(value.strip())
+
+        if not grouped:
+            return ""
+
+        pieces = []
+        for memory_type, values in grouped.items():
+            unique = []
+            for value in values:
+                if value not in unique:
+                    unique.append(value)
+            snippet = "; ".join(unique[:2])
+            label = self.format_memory_type(memory_type)
+            pieces.append(f"{label}: {snippet}")
+
+        return "Key context - " + "; ".join(pieces)
+
+    def format_memory_type(self, memory_type):
+        mapping = {
+            "preferences": "Preferences",
+            "preference": "Preferences",
+            "project_context": "Project context",
+            "personal_context": "Personal context",
+            "working_patterns": "Working patterns",
+            "working_pattern": "Working patterns",
+            "goals": "Goals",
+            "goal": "Goals",
+            "humor_tolerance": "Humor",
+            "other": "Other"
+        }
+        return mapping.get(memory_type, memory_type.replace("_", " ").title())
+
+    def rank_memory_items(self, user_message, memory_items, top_k, min_score):
+        query_tokens = self.tokenize_for_memory(user_message)
+        if not query_tokens:
+            return []
+
+        scored = []
+        for item in memory_items:
+            score = self.score_memory_item(user_message, query_tokens, item)
+            if score >= min_score:
+                scored.append((score, item))
+
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        return [item for _, item in scored[:top_k]]
+
+    def tokenize_for_memory(self, text):
+        tokens = re.findall(r"[a-z0-9]+", text.lower())
+        stopwords = {
+            "the", "and", "for", "with", "this", "that", "from", "about", "your", "you",
+            "are", "was", "were", "will", "just", "like", "have", "has", "had", "but",
+            "not", "what", "how", "can", "could", "would", "should", "when", "where",
+            "which", "who", "why", "into", "onto", "over", "under", "than", "then",
+            "help", "please", "thanks", "thank", "need", "want", "maybe", "some"
+        }
+        return [token for token in tokens if token not in stopwords and len(token) > 2]
+
+    def score_memory_item(self, user_message, query_tokens, item):
+        if not isinstance(item, dict):
+            return 0.0
+
+        memory_text = f"{item.get('type', '')} {item.get('value', '')}"
+        memory_tokens = set(self.tokenize_for_memory(memory_text))
+        if not memory_tokens:
+            return 0.0
+
+        overlap = len(set(query_tokens) & memory_tokens)
+        score = overlap / (len(set(query_tokens)) + 1)
+
+        value = item.get("value")
+        if isinstance(value, str) and value.strip():
+            if value.lower() in user_message.lower():
+                score += 0.3
+
+        return self.clamp(score, 0.0, 1.0)
+
+    def get_mood_state(self):
+        default_state = self.emotion_config.get(
+            "mood_default",
+            {"valence": 0.0, "energy": 0.5, "label": "calm"}
+        )
+        state = self.memory.get_mood_state(default_state)
+        if not isinstance(state, dict):
+            state = default_state
+
+        valence = self.safe_float(state.get("valence"), default_state.get("valence", 0.0))
+        energy = self.safe_float(state.get("energy"), default_state.get("energy", 0.5))
+        label = state.get("label") or self.label_from_state(valence, energy)
+
+        return {"valence": valence, "energy": energy, "label": label}
+
+    def update_mood_state(self, user_message):
+        if not self.emotion_config.get("enabled", True):
+            return None
+
+        state = self.get_mood_state()
+        decay = self.safe_float(self.emotion_config.get("mood_decay", 0.15), 0.15)
+
+        valence = state["valence"] * (1.0 - decay)
+        energy = state["energy"] + (0.5 - state["energy"]) * decay
+
+        delta = self.compute_mood_delta(user_message)
+        valence = self.clamp(valence + delta["valence"], -1.0, 1.0)
+        energy = self.clamp(energy + delta["energy"], 0.0, 1.0)
+
+        label = self.label_from_state(valence, energy)
+        new_state = {
+            "valence": round(valence, 2),
+            "energy": round(energy, 2),
+            "label": label
+        }
+
+        self.memory.set_mood_state(new_state)
+        return new_state
+
+    def compute_mood_delta(self, text):
+        if not isinstance(text, str) or not text.strip():
+            return {"valence": 0.0, "energy": 0.0}
+
+        text_lower = text.lower()
+
+        positive = [
+            "thanks", "thank you", "appreciate", "awesome", "great", "love",
+            "nice", "cool", "sweet", "perfect", "amazing"
+        ]
+        negative = [
+            "frustrated", "stuck", "annoyed", "angry", "upset", "hate",
+            "terrible", "broken", "bug", "error", "issue", "fail", "failed", "wtf"
+        ]
+        urgent = ["urgent", "asap", "deadline", "hurry", "quick"]
+        tired = ["tired", "exhausted", "burnt", "sleepy"]
+        excited = ["excited", "hyped", "lets go", "let's go", "pump"]
+        confused = ["confused", "not sure", "unsure", "idk", "unclear"]
+        calm = ["calm", "no rush", "take your time", "slow", "chill"]
+
+        def contains_any(terms):
+            return any(term in text_lower for term in terms)
+
+        valence = 0.0
+        energy = 0.0
+
+        if contains_any(positive):
+            valence += 0.25
+        if contains_any(negative):
+            valence -= 0.2
+        if contains_any(urgent):
+            valence -= 0.05
+            energy += 0.2
+        if contains_any(tired):
+            valence -= 0.1
+            energy -= 0.2
+        if contains_any(excited):
+            valence += 0.1
+            energy += 0.2
+        if contains_any(confused):
+            valence -= 0.1
+            energy -= 0.05
+        if contains_any(calm):
+            energy -= 0.1
+
+        return {
+            "valence": self.clamp(valence, -0.5, 0.5),
+            "energy": self.clamp(energy, -0.4, 0.4)
+        }
+
+    def label_from_state(self, valence, energy):
+        if valence <= -0.4 and energy <= 0.45:
+            return "gentle"
+        if valence <= -0.4 and energy > 0.45:
+            return "concerned"
+        if valence >= 0.4 and energy >= 0.6:
+            return "upbeat"
+        if valence >= 0.4:
+            return "warm"
+        if energy >= 0.6:
+            return "focused"
+        return "calm"
+
+    def get_mood_prompt(self, mood_state):
+        if not mood_state:
+            return ""
+
+        label = mood_state.get("label", "calm")
+        tone_map = {
+            "upbeat": "Positive and encouraging. Slightly higher energy.",
+            "warm": "Friendly and companion-like. Add small supportive touches.",
+            "focused": "Direct and task-first. Reduce small talk.",
+            "calm": "Steady and relaxed. Keep responses even and clear.",
+            "gentle": "Soft, reassuring, and patient.",
+            "concerned": "Supportive and careful. Check in once if the user seems stressed."
+        }
+
+        tone = tone_map.get(label, "Steady and relaxed. Keep responses even and clear.")
+        return f"Current mood: {label}. Tone guidance: {tone}"
+
+    def should_trigger_curiosity(self, user_message, explicit_items):
+        if not self.emotion_config.get("curiosity_enabled", True):
+            return False
+        if explicit_items:
+            return False
+
+        score = self.compute_curiosity_score(user_message)
+        threshold = self.safe_float(self.emotion_config.get("curiosity_threshold", 0.6), 0.6)
+        return score >= threshold
+
+    def compute_curiosity_score(self, text):
+        if not isinstance(text, str) or not text.strip():
+            return 0.0
+
+        text_lower = text.lower()
+        word_count = len(re.findall(r"\w+", text_lower))
+        short_limit = int(self.emotion_config.get("curiosity_short_word_count", 8))
+
+        score = 0.0
+        if word_count <= short_limit:
+            score += 0.35
+
+        if any(phrase in text_lower for phrase in [
+            "not sure", "unsure", "idk", "maybe", "something", "stuff", "whatever"
+        ]):
+            score += 0.35
+
+        if any(phrase in text_lower for phrase in [
+            "help", "advice", "thoughts", "idea", "suggest", "recommend"
+        ]):
+            score += 0.2
+
+        if "?" in text:
+            score -= 0.15
+
+        if word_count >= 20:
+            score -= 0.1
+
+        return self.clamp(score, 0.0, 1.0)
+
+    def safe_float(self, value, default):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def clamp(self, value, min_value, max_value):
+        return max(min_value, min(max_value, value))
+
     def postprocess_memory(self, user_message, assistant_response):
         """Run memory extraction/summarization in the background"""
         memory_config = self.config.get("memory", {})
-        if not memory_config.get("extraction_enabled", True) and not memory_config.get("summary_enabled", True):
+        if (
+            not memory_config.get("extraction_enabled", True)
+            and not memory_config.get("summary_enabled", True)
+            and not memory_config.get("long_term_memory_enabled", True)
+        ):
             return
 
         thread = threading.Thread(
@@ -135,6 +575,9 @@ class SollieBrain:
 
         if memory_config.get("extraction_enabled", True):
             self.extract_and_store_user_profile(user_message, assistant_response)
+
+        if memory_config.get("long_term_memory_enabled", True):
+            self.extract_and_store_long_term_memory(user_message, assistant_response)
 
         if memory_config.get("summary_enabled", True):
             self.summarize_conversations_if_needed()
@@ -183,6 +626,40 @@ class SollieBrain:
             return
 
         self.memory.update_user_profile(updates)
+
+    def extract_and_store_long_term_memory(self, user_message, assistant_response):
+        """Extract durable memory items for long-term use"""
+        memory_config = self.config.get("memory", {})
+        max_items = int(memory_config.get("long_term_memory_max_items", 3))
+        if max_items <= 0:
+            return
+
+        existing_memory = self.memory.get_user_memory(limit=memory_config.get("user_memory_limit", 50))
+        system_prompt = (
+            "You are a memory extraction engine. Extract durable, long-term facts about the user "
+            "that will matter in future sessions. Ignore one-off tasks, temporary states, or "
+            "time-bound details. Return JSON only as an array of objects with keys: type, value. "
+            f"Return at most {max_items} items. If nothing new, return []."
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Existing memory: {json.dumps(existing_memory)}"},
+            {"role": "user", "content": f"User message: {user_message}"},
+            {"role": "assistant", "content": f"Assistant reply: {assistant_response}"}
+        ]
+
+        try:
+            response = self.call_lm_studio_with_options(messages, temperature=0.1, max_tokens=220)
+            items = self.parse_memory_items_response(response)
+        except Exception:
+            return
+
+        if not items:
+            return
+
+        items = items[:max_items]
+        self.memory.add_memory_items(items, source="extracted")
 
     def summarize_conversations_if_needed(self):
         """Summarize older conversations and store the summary"""
