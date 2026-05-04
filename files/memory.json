@@ -1,0 +1,333 @@
+{
+  "version": 1,
+  "created_at": "2026-05-04T16:27:15.332975",
+  "updated_at": "2026-05-04T19:46:26.228645",
+  "preferences": {
+    "user_profile": {
+      "preferences": [
+        "chatting"
+      ],
+      "project_context": [
+        "video game mod"
+      ],
+      "personal_context": [],
+      "working_patterns": [],
+      "humor_tolerance": [],
+      "goals": [],
+      "other": []
+    },
+    "mood_state": {
+      "valence": 0.0,
+      "energy": 0.5,
+      "label": "calm"
+    }
+  },
+  "conversations": [
+    {
+      "id": 104,
+      "timestamp": "2026-05-04T16:04:09.871304",
+      "role": "user",
+      "content": "yo!",
+      "action_taken": null
+    },
+    {
+      "id": 105,
+      "timestamp": "2026-05-04T16:04:32.409377",
+      "role": "user",
+      "content": "how bout now?",
+      "action_taken": null
+    },
+    {
+      "id": 106,
+      "timestamp": "2026-05-04T16:04:35.399833",
+      "role": "assistant",
+      "content": "Still got everything from last time. You were working on a few projects, including that script for the video game mod. Want to dive back in or start something new today?",
+      "action_taken": null
+    },
+    {
+      "id": 107,
+      "timestamp": "2026-05-04T16:04:47.433925",
+      "role": "user",
+      "content": "how are you today sollie?",
+      "action_taken": null
+    },
+    {
+      "id": 108,
+      "timestamp": "2026-05-04T16:04:50.096120",
+      "role": "assistant",
+      "content": "I'm running smoothly, thanks for asking. No issues here. What's on your mind, though? Need any help or just chatting?",
+      "action_taken": null
+    },
+    {
+      "id": 109,
+      "timestamp": "2026-05-04T16:05:07.330799",
+      "role": "user",
+      "content": "can you explain to me cholevsky decomposition?",
+      "action_taken": null
+    },
+    {
+      "id": 110,
+      "timestamp": "2026-05-04T16:05:10.960353",
+      "role": "assistant",
+      "content": "A bit of math. Cholesky Decomposition is a factorization technique used for square matrices that are symmetric positive-definite. It breaks down the matrix into a lower triangular matrix (L) and its conjugate transpose. This helps in solving systems of linear equations, finding eigenvalues, and other applications.\n\nDo you want to know more about how it works or is there something specific you'd like to use this for?",
+      "action_taken": null
+    },
+    {
+      "id": 111,
+      "timestamp": "2026-05-04T16:05:17.287887",
+      "role": "user",
+      "content": "yes",
+      "action_taken": null
+    },
+    {
+      "id": 112,
+      "timestamp": "2026-05-04T16:05:22.205655",
+      "role": "assistant",
+      "content": "Let's dive a bit deeper. The Cholesky Decomposition takes the form:\n\nA = LL^*\n\nwhere A is your symmetric positive-definite matrix, L is the lower triangular matrix, and L^* is its conjugate transpose.\n\nHere are the steps to decompose A into L:\n\n1. Take the first row of A (a0) and compute the elements l00, l01, ..., l0n.\n2. For subsequent rows, use a combination of previous computed values to find new elements in each row.\n\nThe formula for each element is: lij = \u221a(aii - \u2211 k<i lk^2 * akk)\n\nIt's an iterative process that breaks down the original matrix into smaller components.\n\nDo you want me to explain more about the algorithm or see some example use cases?",
+      "action_taken": null
+    },
+    {
+      "id": 113,
+      "timestamp": "2026-05-04T16:05:29.198933",
+      "role": "user",
+      "content": "simpler?",
+      "action_taken": null
+    },
+    {
+      "id": 114,
+      "timestamp": "2026-05-04T16:05:32.929372",
+      "role": "assistant",
+      "content": "Think of Cholesky Decomposition like a \"square root\" for matrices. It turns a complicated matrix (A) into two simpler ones:\n\n- A lower triangle part (L), which is easy to work with\n- The conjugate transpose of L (L^*), which is also easy\n\nThis makes solving systems of linear equations and other tasks much faster and more manageable.\n\nWant me to give you an example or show how it's used in practice?",
+      "action_taken": null
+    },
+    {
+      "id": 115,
+      "timestamp": "2026-05-04T16:05:40.568570",
+      "role": "user",
+      "content": "sure",
+      "action_taken": null
+    },
+    {
+      "id": 116,
+      "timestamp": "2026-05-04T16:05:45.666963",
+      "role": "assistant",
+      "content": "Let's say we have a matrix A:\n\n| 4  1  2 |\n| 1  5  3 |\n| 2  3  7 |\n\nWe can use Cholesky Decomposition to break this down into L and L^*. The result would be:\n\nL = | 2   0   0 |\n    | 0.5 1.73  0 |\n    | -0.5 1.21  2.16 |\n\nL^* is the conjugate transpose of L, but for simplicity, let's focus on L.\n\nNow, if we want to solve a system like Ax = b, where x is an unknown vector and b is another given vector, we can use this decomposition to speed up the process.\n\nWant me to explain how to use this result or move on?",
+      "action_taken": null
+    },
+    {
+      "id": 117,
+      "timestamp": "2026-05-04T16:27:20.275902",
+      "role": "user",
+      "content": "hello",
+      "action_taken": null
+    },
+    {
+      "id": 118,
+      "timestamp": "2026-05-04T16:27:24.713833",
+      "role": "assistant",
+      "content": "Hey there! \ud83d\udc4b\n\nWere you still thinking about matrix decomposition, or did you want to shift gears? Let me know what's up!",
+      "action_taken": null
+    },
+    {
+      "id": 119,
+      "timestamp": "2026-05-04T16:27:35.165908",
+      "role": "user",
+      "content": "can you code?",
+      "action_taken": null
+    },
+    {
+      "id": 120,
+      "timestamp": "2026-05-04T16:27:41.313469",
+      "role": "assistant",
+      "content": "Got it. Yes, I can definitely write and understand code. \ud83d\udcbb\n\nI can generate snippets, functions, and even full scripts in many languages\u2014like Python, JavaScript, C++, etc.\u2014depending on what you need. Just tell me the language and what you want the code to do!\n\nAre you looking for something specific? Maybe related to matrices or decomposition from before?",
+      "action_taken": null
+    },
+    {
+      "id": 121,
+      "timestamp": "2026-05-04T16:27:55.983412",
+      "role": "user",
+      "content": "nah this is new.",
+      "action_taken": null
+    },
+    {
+      "id": 122,
+      "timestamp": "2026-05-04T16:28:02.514176",
+      "role": "assistant",
+      "content": "Okay, no problem at all! Switching gears is totally fine. \ud83d\ude0a\n\nWhether it's something fun, practical, or completely random\u2014I'm ready for whatever you have in mind. What should we chat about next?",
+      "action_taken": null
+    },
+    {
+      "id": 123,
+      "timestamp": "2026-05-04T19:46:17.721888",
+      "role": "user",
+      "content": "yo",
+      "action_taken": null
+    },
+    {
+      "id": 124,
+      "timestamp": "2026-05-04T19:46:24.031245",
+      "role": "assistant",
+      "content": "Yo! What's up? \ud83d\udc4b\n\nAnything on your mind, or are we just casually chatting today? Let me know what you want to dive into next!",
+      "action_taken": null
+    }
+  ],
+  "user_memory": [
+    {
+      "id": 1,
+      "type": "project_context",
+      "value": "video game mod",
+      "created_at": "2026-05-04T16:04:38.428501",
+      "source": "extracted",
+      "last_used_at": null,
+      "use_count": 0
+    },
+    {
+      "id": 2,
+      "type": "preferences",
+      "value": "chatting",
+      "created_at": "2026-05-04T16:04:53.107483",
+      "source": "extracted",
+      "last_used_at": null,
+      "use_count": 0
+    }
+  ],
+  "action_log": [
+    {
+      "id": 1,
+      "timestamp": "2026-05-03T23:36:35.432140",
+      "action_type": "open_application",
+      "action_details": {
+        "app_name": "notepad.exe"
+      },
+      "approved": true,
+      "result": "{\"success\": true, \"message\": \"Opened notepad.exe\"}"
+    },
+    {
+      "id": 2,
+      "timestamp": "2026-05-03T23:37:23.610343",
+      "action_type": "open_application",
+      "action_details": {
+        "app_name": "notepad.exe"
+      },
+      "approved": true,
+      "result": "{\"success\": true, \"message\": \"Opened notepad.exe\"}"
+    },
+    {
+      "id": 3,
+      "timestamp": "2026-05-03T23:37:39.162122",
+      "action_type": "open_application",
+      "action_details": {
+        "app_name": "notepad.exe"
+      },
+      "approved": true,
+      "result": "{\"success\": true, \"message\": \"Opened notepad.exe\"}"
+    },
+    {
+      "id": 4,
+      "timestamp": "2026-05-03T23:59:47.738418",
+      "action_type": "open_random_file",
+      "action_details": {
+        "file_extensions": [
+          ".bmp",
+          ".gif",
+          ".jpeg",
+          ".jpg",
+          ".png",
+          ".webp"
+        ]
+      },
+      "approved": true,
+      "result": "{\"success\": true, \"message\": \"Opened random file: Screenshot 2026-04-28 220725.png\"}"
+    },
+    {
+      "id": 5,
+      "timestamp": "2026-05-04T00:00:20.319615",
+      "action_type": "open_application",
+      "action_details": {
+        "app_name": "steam.exe"
+      },
+      "approved": true,
+      "result": "{\"success\": false, \"error\": \"[WinError 2] The system cannot find the file specified\"}"
+    },
+    {
+      "id": 6,
+      "timestamp": "2026-05-04T00:00:34.362596",
+      "action_type": "open_application",
+      "action_details": {
+        "app_name": "steam.exe"
+      },
+      "approved": true,
+      "result": "{\"success\": false, \"error\": \"[WinError 2] The system cannot find the file specified\"}"
+    },
+    {
+      "id": 7,
+      "timestamp": "2026-05-04T00:00:45.904591",
+      "action_type": "open_application",
+      "action_details": {
+        "app_name": "steam.exe"
+      },
+      "approved": true,
+      "result": "{\"success\": false, \"error\": \"[WinError 2] The system cannot find the file specified\"}"
+    },
+    {
+      "id": 8,
+      "timestamp": "2026-05-04T00:06:57.976124",
+      "action_type": "open_application",
+      "action_details": {
+        "app_name": "steam.exe"
+      },
+      "approved": true,
+      "result": "{\"success\": true, \"message\": \"Opened steam\"}"
+    },
+    {
+      "id": 9,
+      "timestamp": "2026-05-04T00:07:10.967336",
+      "action_type": "open_application",
+      "action_details": {
+        "app_name": "steam.exe"
+      },
+      "approved": true,
+      "result": "{\"success\": true, \"message\": \"Opened steam\"}"
+    },
+    {
+      "id": 10,
+      "timestamp": "2026-05-04T00:07:27.870734",
+      "action_type": "open_application",
+      "action_details": {
+        "app_name": "steam.exe"
+      },
+      "approved": true,
+      "result": "{\"success\": true, \"message\": \"Opened steam\"}"
+    },
+    {
+      "id": 11,
+      "timestamp": "2026-05-04T00:08:14.663190",
+      "action_type": "open_random_file",
+      "action_details": {
+        "file_extensions": [
+          ".bmp",
+          ".gif",
+          ".jpeg",
+          ".jpg",
+          ".png",
+          ".webp"
+        ]
+      },
+      "approved": true,
+      "result": "{\"success\": true, \"message\": \"Opened random file: xbox_rt_soft_md.png\"}"
+    },
+    {
+      "id": 12,
+      "timestamp": "2026-05-04T13:16:34.985263",
+      "action_type": "get_system_info",
+      "action_details": {},
+      "approved": true,
+      "result": "{\"success\": true, \"info\": {\"cpu_percent\": 0.9, \"memory_percent\": 77.6, \"disk_percent\": 57.4}}"
+    }
+  ],
+  "next_ids": {
+    "conversation": 125,
+    "user_memory": 3,
+    "action_log": 13
+  }
+}
