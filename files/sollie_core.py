@@ -589,7 +589,7 @@ class AgentLoop:
             try:
                 return json.loads(snippet)
             except json.JSONDecodeError:
-                return None
+                pass  # Fall through to key-value parser
 
         # Try to parse key-value format (key: 'value' or key: value)
         result = {}
@@ -625,6 +625,16 @@ class AgentLoop:
         
         return result if result else None
 
+    def _try_fix_unquoted_json(self, text):
+        """Attempt to fix unquoted JSON keys like {type: "app", params: {name: "zen"}}."""
+        if not isinstance(text, str) or not text.strip().startswith("{"):
+            return None
+        try:
+            fixed = re.sub(r'(\{|\,)\s*([a-zA-Z_][a-zA-Z_0-9]*)\s*:', r'\1 "\2":', text)
+            return json.loads(fixed)
+        except (json.JSONDecodeError, Exception):
+            return None
+
     def parse_structured_response(self, response_text):
         payload = self._try_parse_json_payload(response_text)
         if not isinstance(payload, dict):
@@ -641,6 +651,8 @@ class AgentLoop:
             response = response_text.strip()
 
         action = payload.get("action")
+        if isinstance(action, str) and action.strip().startswith("{"):
+            action = self._try_fix_unquoted_json(action)
         reasoning = payload.get("reasoning")
         follow_up = payload.get("follow_up")
         tool_confidence = self._normalize_tool_confidence(payload.get("tool_confidence"))
@@ -712,11 +724,12 @@ class AgentLoop:
             })
 
         format_prompt = (
-            "Respond ONLY as JSON with keys: response (string), reasoning (string), "
-            "follow_up (string), tool_confidence (number 0-1), action (object or null). "
-            "The action schema is {type: string, params: object, description: string}. "
+            "You MUST respond with valid JSON only. Use double-quoted keys and values. "
+            "Required keys: response (string), reasoning (string), follow_up (string), "
+            "tool_confidence (number 0-1), action (object or null). "
+            "The action schema is {\"type\": \"string\", \"params\": {}, \"description\": \"string\"}. "
             "Use null when no action is needed. If no follow-up question, use an empty string. "
-            "Do not wrap JSON in code fences."
+            "Do not wrap JSON in code fences. Do not include any text outside the JSON object."
         )
         messages.append({"role": "system", "content": format_prompt})
 
@@ -828,6 +841,7 @@ class AgentLoop:
 
 class SolieCore:
     def __init__(self, config_path="config.json"):
+        self.config_path = config_path
         self.config = self.load_config(config_path)
         self.memory_manager = MemoryManager(self.config)
         self.memory = self.memory_manager.memory
@@ -844,6 +858,19 @@ class SolieCore:
     def load_config(self, config_path):
         with open(config_path, "r") as f:
             return json.load(f)
+
+    def reload_config(self, config_path=None):
+        if config_path is None:
+            config_path = self.config_path if hasattr(self, 'config_path') else "config.json"
+        self.config = self.load_config(config_path)
+        self.lm_studio_url = self.config["lm_studio"]["api_url"]
+        self.personality = self.config["sollie"]["personality"]
+        self.approval_required = self.config["sollie"]["approval_required"]
+        self.emotion_config = self.config.get("emotion", {})
+        self.llm_client = LLMClient(self.config, self.lm_studio_url)
+        self.personality_manager = PersonalityManager(self.memory, self.emotion_config)
+        self.tool_manager = ToolManager(self.actions, self.memory, self.config)
+        self.agent_loop = AgentLoop(self.llm_client, self.tool_manager, self.config)
 
     def resolve_memory_paths(self, memory_config):
         return self.memory_manager.resolve_memory_paths(memory_config)

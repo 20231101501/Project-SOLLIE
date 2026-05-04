@@ -9,6 +9,7 @@ import psutil
 import json
 import sys
 import random
+import shutil
 from pathlib import Path
 import webbrowser
 
@@ -125,6 +126,30 @@ class SollieActions:
             if entry_path.is_file() and entry_path.name.lower() in candidate_names:
                 return entry_path
 
+        # Fallback: Check system PATH using shutil.which
+        which_path = shutil.which(normalized)
+        if which_path:
+            candidate = Path(which_path)
+            if self._is_trusted_location(candidate):
+                return candidate
+
+        # Search Desktop for shortcuts and executables
+        desktop_path = self.user_home / "Desktop"
+        if desktop_path.exists():
+            for item in desktop_path.iterdir():
+                if item.is_file() and item.name.lower() in candidate_names:
+                    return item
+                if item.is_file() and item.stem.lower() in {n.lower() for n in candidate_names}:
+                    return item
+
+        # Search Desktop subfolders (common for game shortcuts)
+        if desktop_path.exists():
+            for item in desktop_path.iterdir():
+                if item.is_dir():
+                    found = self._find_app_in_tree(item, candidate_names, max_depth=2)
+                    if found:
+                        return found
+
         # Search common install locations
         for root in self._app_search_roots():
             found = self._find_app_in_tree(root, candidate_names)
@@ -132,6 +157,32 @@ class SollieActions:
                 return found
 
         return None
+
+    def _is_trusted_location(self, path):
+        """Check if a resolved path is within a trusted system directory."""
+        trusted_roots = []
+        
+        # Add standard Windows system paths
+        for var in ["WINDIR", "PROGRAMFILES", "PROGRAMFILES(X86)"]:
+            root = os.environ.get(var)
+            if root:
+                trusted_roots.append(Path(root))
+        
+        # Add user-specific trusted paths
+        local = os.environ.get("LOCALAPPDATA")
+        if local:
+            trusted_roots.extend([
+                Path(local) / "Programs",
+                Path(local) / "Microsoft" / "WindowsApps"
+            ])
+        
+        # Add configured allowed roots
+        trusted_roots.extend(self.allowed_root_paths)
+
+        try:
+            return any(path.is_relative_to(root) for root in trusted_roots if root.exists())
+        except (ValueError, AttributeError):
+            return False
 
     def _resolve_path(self, path_str):
         path = Path(path_str).expanduser()
@@ -377,33 +428,38 @@ class SollieActions:
     # ===== APPLICATION OPERATIONS =====
     
     def open_application(self, app_name):
-        """Open an application"""
+        """Open an application (whitelist removed for flexibility)"""
         try:
-            if not self.is_app_allowed(app_name):
-                return {"success": False, "error": f"{app_name} is not in the allowed applications list"}
-
             resolved = self._resolve_app_path(app_name)
-            if not resolved:
-                return {
-                    "success": False,
-                    "error": "Application not found. Add the full path to allowed_applications in config.json."
-                }
+            
+            # Fallback: try to start directly via system PATH/associations
+            if not resolved or not resolved.exists():
+                try:
+                    subprocess.Popen([app_name])
+                    return {"success": True, "message": f"Started {app_name}"}
+                except Exception:
+                    return {"success": False, "error": f"Application not found: {app_name}"}
 
             if resolved.suffix.lower() == ".lnk":
                 os.startfile(str(resolved))
             else:
                 subprocess.Popen([str(resolved)])
 
-            return {"success": True, "message": f"Opened {resolved.stem}"}
+            return {"success": True, "message": f"Opened {resolved.name}"}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    def application(self, name):
+        """Alias for open_application"""
+        return self.open_application(name)
+
+    def command(self, command):
+        """Alias for execute_safe_command"""
+        return self.execute_safe_command(command)
     
     def close_application(self, app_name):
         """Close a running application"""
         try:
-            if not self.is_app_allowed(app_name):
-                return {"success": False, "error": f"{app_name} is not in the allowed applications list"}
-            
             target_name = self._normalize_app_name(app_name)
             # Find and terminate the process
             killed = False
@@ -459,7 +515,6 @@ class SollieActions:
     
     def execute_safe_command(self, command):
         """Execute a safe system command"""
-        # Very restricted - only allow specific safe commands
         safe_commands = ['dir', 'ls', 'echo', 'date', 'time']
         
         cmd_base = command.split()[0].lower()
@@ -471,3 +526,16 @@ class SollieActions:
             return {"success": True, "output": result.stdout}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    def type_text(self, text, interval=0.05):
+        """Type text into the active window using PyAutoGUI"""
+        try:
+            import pyautogui
+            pyautogui.write(text, interval=interval)
+            return {"success": True, "message": f"Typed text successfully."}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def write_file_content(self, filepath, content):
+        """Write content to a file (overwrites existing)"""
+        return self.create_file(filepath, content)
