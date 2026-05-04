@@ -187,7 +187,7 @@
       "id": 185,
       "timestamp": "2026-05-05T02:31:25.070698",
       "role": "user",
-      "content": "sollie open notepad",
+      "content": "sol open notepad",
       "action_taken": null
     },
     {
@@ -201,7 +201,7 @@
       "id": 187,
       "timestamp": "2026-05-05T02:31:57.482428",
       "role": "user",
-      "content": "sollie open zen browser",
+      "content": "sol open zen browser",
       "action_taken": null
     },
     {
@@ -271,7 +271,7 @@
       "id": 197,
       "timestamp": "2026-05-05T02:50:20.574578",
       "role": "user",
-      "content": "hello sollie",
+      "content": "hello sol",
       "action_taken": null
     },
     {
@@ -360,7 +360,7 @@
     {
       "id": 3,
       "type": "character_description",
-      "value": "SOLLIE, a local AI assistant designed to be casual, friendly, and calm.",
+      "value": "SOL, a local AI assistant designed to be casual, friendly, and calm.",
       "created_at": "2026-05-05T00:52:03.072646",
       "source": "extracted",
       "last_used_at": "2026-05-05T02:50:20.578146",

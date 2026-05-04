@@ -1,5 +1,5 @@
 """
-Sollie Memory System
+Sol Memory System
 JSON-backed storage for conversation history, user profile, and memory.
 """
 
@@ -9,8 +9,8 @@ from datetime import datetime
 from pathlib import Path
 
 
-class SollieMemory:
-    def __init__(self, storage_path="sollie_memory.json", legacy_db_path=None):
+class SolMemory:
+    def __init__(self, storage_path="sol_memory.json", legacy_db_path=None):
         self.storage_path = Path(storage_path)
         self.legacy_db_path = Path(legacy_db_path) if legacy_db_path else None
         self._lock = threading.RLock()
@@ -270,7 +270,7 @@ class SollieMemory:
         ]
 
     def log_action(self, action_type, action_details, approved, result=None):
-        """Log an action that Sollie attempted or executed"""
+        """Log an action that Sol attempted or executed"""
         details = action_details
         try:
             json.dumps(details)

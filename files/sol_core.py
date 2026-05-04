@@ -1,5 +1,5 @@
 """
-Sollie Core - AI Brain
+Sol Core - AI Brain
 Connects LM Studio, memory, and PC actions with safety layer
 """
 
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import requests
 
-from sollie_memory import SollieMemory
-from sollie_actions import SollieActions
+from sol_memory import SolMemory
+from sol_actions import SolActions
 
 
 class LLMClient:
@@ -49,7 +49,7 @@ class MemoryManager:
         storage_path, legacy_db_path = self.resolve_memory_paths(memory_config)
         self.storage_path = storage_path
         self.legacy_db_path = legacy_db_path
-        self.memory = SollieMemory(storage_path, legacy_db_path=legacy_db_path)
+        self.memory = SolMemory(storage_path, legacy_db_path=legacy_db_path)
 
     def resolve_memory_paths(self, memory_config):
         storage_path = memory_config.get("storage_path")
@@ -72,7 +72,7 @@ class MemoryManager:
         storage_path = self._maybe_copy_legacy_json(storage_path)
 
         if legacy_db_path is None:
-            default_db = Path("sollie_memory.db")
+            default_db = Path("sol_memory.db")
             if default_db.exists() and not Path(storage_path).exists():
                 legacy_db_path = str(default_db)
 
@@ -80,7 +80,7 @@ class MemoryManager:
 
     def _maybe_copy_legacy_json(self, storage_path):
         target = Path(storage_path)
-        legacy_json = Path("sollie_memory.json")
+        legacy_json = Path("sol_memory.json")
 
         if target.name == "memory.json" and not target.exists() and legacy_json.exists():
             try:
@@ -142,33 +142,40 @@ class PersonalityManager:
     def compute_mood_delta(self, text):
         if not isinstance(text, str) or not text.strip():
             return {"valence": 0.0, "energy": 0.0}
-
+        
         text_lower = text.lower()
-
+        
         positive = [
             "thanks", "thank you", "appreciate", "awesome", "great", "love",
-            "nice", "cool", "sweet", "perfect", "amazing"
+            "nice", "cool", "sweet", "perfect", "amazing", "excellent",
+            "brilliant", "genius", "fantastic"
         ]
         negative = [
             "frustrated", "stuck", "annoyed", "angry", "upset", "hate",
-            "terrible", "broken", "bug", "error", "issue", "fail", "failed", "wtf"
+            "terrible", "broken", "bug", "error", "issue", "fail", "failed", "wtf",
+            "stupid", "dumb", "useless", "garbage"
         ]
-        urgent = ["urgent", "asap", "deadline", "hurry", "quick"]
-        tired = ["tired", "exhausted", "burnt", "sleepy"]
-        excited = ["excited", "hyped", "lets go", "let's go", "pump"]
-        confused = ["confused", "not sure", "unsure", "idk", "unclear"]
+        urgent = ["urgent", "asap", "deadline", "hurry", "quick", "now"]
+        tired = ["tired", "exhausted", "burnt", "sleepy", "done", "over it"]
+        excited = ["excited", "hyped", "lets go", "let's go", "pump", "yes!", "woo"]
+        confused = ["confused", "not sure", "unsure", "idk", "unclear", "wat"]
         calm = ["calm", "no rush", "take your time", "slow", "chill"]
-
+        playful = ["hehe", "haha", "lol", "funny", "joke", "play", "game"]
+        repetitive = ["again", "still", "another one", "same thing", "keep asking"]
+        boring = ["boring", "bored", "whatever", "dunno", "meh"]
+        
         def contains_any(terms):
             return any(term in text_lower for term in terms)
-
+        
         valence = 0.0
         energy = 0.0
-
+        
         if contains_any(positive):
             valence += 0.25
+            energy += 0.05
         if contains_any(negative):
             valence -= 0.2
+            energy += 0.1
         if contains_any(urgent):
             valence -= 0.05
             energy += 0.2
@@ -176,24 +183,39 @@ class PersonalityManager:
             valence -= 0.1
             energy -= 0.2
         if contains_any(excited):
-            valence += 0.1
-            energy += 0.2
+            valence += 0.15
+            energy += 0.25
         if contains_any(confused):
-            valence -= 0.1
+            valence -= 0.05
             energy -= 0.05
         if contains_any(calm):
             energy -= 0.1
-
+        if contains_any(playful):
+            valence += 0.15
+            energy += 0.15
+        if contains_any(repetitive):
+            valence -= 0.15
+            energy -= 0.1
+        if contains_any(boring):
+            valence -= 0.1
+            energy -= 0.15
+        
         return {
             "valence": self.clamp(valence, -0.5, 0.5),
             "energy": self.clamp(energy, -0.4, 0.4)
         }
 
     def label_from_state(self, valence, energy):
-        if valence <= -0.4 and energy <= 0.45:
+        if valence <= -0.5 and energy <= 0.3:
+            return "dry"
+        if valence <= -0.3 and energy > 0.6:
+            return "snarky"
+        if valence <= -0.3 and energy <= 0.6:
             return "gentle"
         if valence <= -0.4 and energy > 0.45:
             return "concerned"
+        if valence >= 0.5 and energy >= 0.7:
+            return "playful"
         if valence >= 0.4 and energy >= 0.6:
             return "upbeat"
         if valence >= 0.4:
@@ -205,17 +227,20 @@ class PersonalityManager:
     def get_mood_prompt(self, mood_state):
         if not mood_state:
             return ""
-
+        
         label = mood_state.get("label", "calm")
         tone_map = {
-            "upbeat": "Positive and encouraging. Slightly higher energy.",
-            "warm": "Friendly and companion-like. Add small supportive touches.",
-            "focused": "Direct and task-first. Reduce small talk.",
-            "calm": "Steady and relaxed. Keep responses even and clear.",
-            "gentle": "Soft, reassuring, and patient.",
-            "concerned": "Supportive and careful. Check in once if the user seems stressed."
+            "playful": "Light, whimsical, and a bit cheeky. Maybe crack a gentle joke or use playful language.",
+            "snarky": "Dry and sarcastic. Make a witty comment about the situation if appropriate, but never mean.",
+            "dry": "Minimal words. Slightly bored tone. Use '*sigh*' or '*eye roll*' if it fits.",
+            "upbeat": "Positive and encouraging. Lightly higher energy. Show genuine enthusiasm.",
+            "warm": "Friendly and companion-like. Add small supportive touches and personal connections.",
+            "focused": "Direct and task-first. Reduce small talk. Get to the point quickly.",
+            "calm": "Steady and relaxed. Keep responses even and clear. No need to rush.",
+            "gentle": "Soft, reassuring, and patient. Be extra supportive if the user seems unsure.",
+            "concerned": "Supportive and careful. Check in once if the user seems stressed. Be grounding."
         }
-
+        
         tone = tone_map.get(label, "Steady and relaxed. Keep responses even and clear.")
         return f"Current mood: {label}. Tone guidance: {tone}"
 
@@ -695,44 +720,54 @@ class AgentLoop:
         history,
         curiosity_active
     ):
+        mood_state = self.personality_manager.get_mood_state()
+        mood_label = mood_state.get("label", "calm") if mood_state else "calm"
+        
         messages = [
             {"role": "system", "content": personality}
         ]
-
+        
         if mood_prompt:
             messages.append({"role": "system", "content": mood_prompt})
-
+        
         if curiosity_active:
+            curiosity_style = "snarky" if mood_label in ["snarky", "dry"] else "gentle"
+            curiosity_msg = (
+                f"Curiosity mode: Ask one short follow-up question to learn more. "
+                f"Be {curiosity_style} in your approach. Ask at most one question."
+            )
             messages.append({
                 "role": "system",
-                "content": "Curiosity mode: ask one short, friendly follow-up question to learn more or clarify. Ask at most one question."
+                "content": curiosity_msg
             })
-
+        
         if summary:
             messages.append({"role": "system", "content": f"Conversation summary: {summary}"})
-
+        
         if profile:
             messages.append({"role": "system", "content": f"User profile: {json.dumps(profile)}"})
-
+        
         if memory_insight:
             messages.append({"role": "system", "content": f"Relevant memory insight: {memory_insight}"})
-
+        
         if explicit_items:
             messages.append({
                 "role": "system",
                 "content": "The user provided explicit memory items. Acknowledge briefly that they were saved."
             })
-
+        
         format_prompt = (
             "You MUST respond with valid JSON only. Use double-quoted keys and values. "
             "Required keys: response (string), reasoning (string), follow_up (string), "
             "tool_confidence (number 0-1), action (object or null). "
             "The action schema is {\"type\": \"string\", \"params\": {}, \"description\": \"string\"}. "
             "Use null when no action is needed. If no follow-up question, use an empty string. "
-            "Do not wrap JSON in code fences. Do not include any text outside the JSON object."
+            "Do not wrap JSON in code fences. Do not include any text outside the JSON object.\n\n"
+            "IMPORTANT: Your response field should reflect your personality. Be natural, use contractions, "
+            "and let your mood influence your word choice. Don't be a robot - be Sol."
         )
         messages.append({"role": "system", "content": format_prompt})
-
+        
         messages.extend(history)
         return messages
 
@@ -790,7 +825,7 @@ class AgentLoop:
         max_steps = agent_config.get("max_steps", 5)
 
         system_prompt = (
-            "You are Sollie, a careful planner. Create a short step-by-step plan "
+            "You are Sol, a careful planner. Create a short step-by-step plan "
             f"with at most {max_steps} steps. Return JSON only with keys: "
             "steps (array of strings), assumptions (array of strings), "
             "clarifying_questions (array of strings)."
@@ -839,16 +874,16 @@ class AgentLoop:
         }
 
 
-class SolieCore:
+class SolCore:
     def __init__(self, config_path="config.json"):
         self.config_path = config_path
         self.config = self.load_config(config_path)
         self.memory_manager = MemoryManager(self.config)
         self.memory = self.memory_manager.memory
-        self.actions = SollieActions(config_path)
+        self.actions = SolActions(config_path)
         self.lm_studio_url = self.config["lm_studio"]["api_url"]
-        self.personality = self.config["sollie"]["personality"]
-        self.approval_required = self.config["sollie"]["approval_required"]
+        self.personality = self.config["sol"]["personality"]
+        self.approval_required = self.config["sol"]["approval_required"]
         self.emotion_config = self.config.get("emotion", {})
         self.llm_client = LLMClient(self.config, self.lm_studio_url)
         self.personality_manager = PersonalityManager(self.memory, self.emotion_config)
@@ -864,8 +899,8 @@ class SolieCore:
             config_path = self.config_path if hasattr(self, 'config_path') else "config.json"
         self.config = self.load_config(config_path)
         self.lm_studio_url = self.config["lm_studio"]["api_url"]
-        self.personality = self.config["sollie"]["personality"]
-        self.approval_required = self.config["sollie"]["approval_required"]
+        self.personality = self.config["sol"]["personality"]
+        self.approval_required = self.config["sol"]["approval_required"]
         self.emotion_config = self.config.get("emotion", {})
         self.llm_client = LLMClient(self.config, self.lm_studio_url)
         self.personality_manager = PersonalityManager(self.memory, self.emotion_config)
@@ -1348,6 +1383,6 @@ class SolieCore:
             return {"success": False, "error": str(e)}
 
 
-class SollieBrain(SolieCore):
+class SolBrain(SolCore):
     """Backward-compatible alias for older imports."""
     pass
