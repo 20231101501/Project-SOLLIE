@@ -1,5 +1,5 @@
 """
-Sollie Test Script
+Sol Test Script
 Quick test to verify all components are working
 """
 
@@ -59,7 +59,7 @@ def test_config():
         with open("config.json", 'r') as f:
             config = json.load(f)
         
-        required_keys = ['lm_studio', 'sollie', 'safety', 'memory']
+        required_keys = ['lm_studio', 'sol', 'safety', 'memory']
         for key in required_keys:
             if key in config:
                 print(f"✓ {key} section found")
@@ -75,14 +75,14 @@ def test_config():
         return False
 
 
-def test_sollie_modules():
-    """Test if Sollie modules can be imported"""
-    print_section("Testing Sollie Modules")
+def test_sol_modules():
+    """Test if Sol modules can be imported"""
+    print_section("Testing Sol Modules")
     
     modules = {
-        "sollie_memory": "Memory system",
-        "sollie_actions": "PC actions",
-        "sollie_core": "Core brain"
+        "sol_memory": "Memory system",
+        "sol_actions": "PC actions",
+        "sol_core": "Core brain"
     }
     
     failed = []
@@ -98,7 +98,7 @@ def test_sollie_modules():
         print(f"\n❌ Failed to import: {', '.join(failed)}")
         return False
     
-    print("\n✓ All Sollie modules loaded")
+    print("\n✓ All Sol modules loaded")
     return True
 
 
@@ -107,9 +107,9 @@ def test_intent_parsing():
     print_section("Testing Intent Parsing")
 
     try:
-        from sollie_core import SollieBrain
+        from sol_core import SolBrain
 
-        brain = SollieBrain()
+        brain = SolBrain()
         action = brain.detect_action_intent("Create a file called todo.txt", "")
 
         if not action or action.get('type') != "create_file":
@@ -189,14 +189,14 @@ def test_lm_studio():
 
 
 def test_brain():
-    """Test Sollie brain functionality"""
-    print_section("Testing Sollie Brain")
+    """Test Sol brain functionality"""
+    print_section("Testing Sol Brain")
     
     try:
-        from sollie_core import SollieBrain
+        from sol_core import SolBrain
         
-        print("Creating Sollie brain instance...")
-        brain = SollieBrain()
+        print("Creating Sol brain instance...")
+        brain = SolBrain()
         print("✓ Brain initialized")
         
         print("\nTesting connection to LM Studio...")
@@ -220,9 +220,9 @@ def test_actions():
     print_section("Testing Action System")
     
     try:
-        from sollie_actions import SollieActions
+        from sol_actions import SolActions
         
-        actions = SollieActions()
+        actions = SolActions()
         print("✓ Actions module loaded")
         
         # Test safe action check
@@ -255,10 +255,10 @@ def test_memory():
     print_section("Testing Memory System")
     
     try:
-        from sollie_memory import SollieMemory
+        from sol_memory import SolMemory
         
         # Create test database
-        memory = SollieMemory("test_memory.json")
+        memory = SolMemory("test_memory.json")
         print("✓ Memory system initialized")
         
         # Test adding a message
@@ -286,18 +286,18 @@ def test_memory():
 def main():
     """Run all tests"""
     print("\n" + "🤖 "*20)
-    print("       SOLLIE SYSTEM TEST")
+    print("       SOL SYSTEM TEST")
     print("🤖 "*20)
     
     tests = [
         ("Imports", test_imports),
         ("Configuration", test_config),
-        ("Sollie Modules", test_sollie_modules),
+        ("Sol Modules", test_sol_modules),
         ("Intent Parsing", test_intent_parsing),
         ("Memory System", test_memory),
         ("Action System", test_actions),
         ("LM Studio Connection", test_lm_studio),
-        ("Sollie Brain", test_brain)
+        ("Sol Brain", test_brain)
     ]
     
     results = {}
@@ -323,8 +323,8 @@ def main():
     if passed == total:
         print("\n" + "="*60)
         print("  🎉 ALL TESTS PASSED!")
-        print("  Sollie is ready to use!")
-        print("  Run: python sollie_gui.py")
+        print("  Sol is ready to use!")
+        print("  Run: python sol_gui.py")
         print("="*60)
         return True
     else:

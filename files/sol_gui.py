@@ -1,5 +1,5 @@
 """
-Sollie GUI - Enhanced Edition
+Sol GUI - Enhanced Edition
 Cyberpunk aesthetic with settings panel, chat history sidebar, theme switcher, and system monitor
 """
 
@@ -15,7 +15,7 @@ import tkinter as tk
 from tkinter import filedialog
 from datetime import datetime
 import psutil
-from sollie_core import SollieBrain
+from sol_core import SolBrain
 
 CYBERDECK_COLORS = {
     "bg": "#0a0e27",
@@ -75,9 +75,9 @@ CLEAN_FONTS = {
 }
 
 
-class SollieGUI:
+class SolGUI:
     def __init__(self):
-        self.brain = SollieBrain()
+        self.brain = SolBrain()
         self.pending_action = None
         self.connection_status = "UNKNOWN"
         self.config_path = os.path.join(os.path.dirname(__file__), "config.json")
@@ -93,7 +93,7 @@ class SollieGUI:
         self.task_enabled = bool(agent_config.get("enabled", True))
 
         self.window = ctk.CTk()
-        self.window.title("SOLLIE AI Assistant")
+        self.window.title("SOL AI Assistant")
         self.window.geometry("1400x850")
         self.window.minsize(1200, 700)
 
@@ -135,7 +135,7 @@ class SollieGUI:
 
         self.title_label = ctk.CTkLabel(
             header_left,
-            text="SOLLIE AI ASSISTANT",
+            text="SOL AI ASSISTANT",
             font=self.fonts["title"],
             text_color=self.colors["accent"]
         )
@@ -332,16 +332,20 @@ class SollieGUI:
         input_container.grid_columnconfigure(0, weight=1)
 
         self.input_box = ctk.CTkEntry(
-            input_container,
-            fg_color=self.colors["panel"],
-            border_width=0,
-            text_color=self.colors["text_alt"],
+            master=input_frame,
             font=self.fonts["body"],
-            placeholder_text="Type your message...",
-            placeholder_text_color=self.colors["muted"]
+            fg_color=self.colors["panel_alt"],
+            text_color=self.colors["text"],
+            border_color=self.colors["outline"],
+            border_width=1,
+            placeholder_text="Type your message to Sol...",
+            height=40
         )
         self.input_box.grid(row=0, column=0, sticky="ew", padx=12, pady=12)
         self.input_box.bind("<Return>", lambda e: self.send_message())
+        
+        # Bind Ctrl+V to handle image paste attempts
+        self.input_box.bind("<Control-v>", self._handle_paste)
 
         button_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
         button_frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
@@ -385,7 +389,7 @@ class SollieGUI:
         )
         export_btn.pack(side="left")
 
-        self.add_message("SYSTEM", "SOLLIE initialized. Ready.", "system")
+        self.add_message("SYSTEM", "SOL initialized. Ready.", "system")
 
     def build_settings_panel(self):
         self.settings_frame = ctk.CTkFrame(
@@ -476,11 +480,11 @@ class SollieGUI:
         )
         section.pack(fill="x", pady=(10, 5), padx=5)
 
-        sollie_config = self.brain.config.get("sollie", {})
+        sol_config = self.brain.config.get("sol", {})
 
         ctk.CTkLabel(parent, text="Name", font=self.fonts["caption"], text_color=self.colors["muted"], anchor="w").pack(fill="x", padx=5)
         self.settings_name = ctk.CTkEntry(parent, fg_color=self.colors["panel"], text_color=self.colors["text"], font=self.fonts["body"])
-        self.settings_name.insert(0, sollie_config.get("name", "Sollie"))
+        self.settings_name.insert(0, sol_config.get("name", "Sol"))
         self.settings_name.pack(fill="x", padx=5, pady=(0, 10))
 
         ctk.CTkLabel(parent, text="Approval Required", font=self.fonts["caption"], text_color=self.colors["muted"], anchor="w").pack(fill="x", padx=5)
@@ -493,7 +497,7 @@ class SollieGUI:
             checkbox_height=18,
             checkbox_width=18
         )
-        if sollie_config.get("approval_required", True):
+        if sol_config.get("approval_required", True):
             self.settings_approval.select()
         self.settings_approval.pack(anchor="w", padx=5, pady=(0, 10))
 
@@ -705,11 +709,11 @@ class SollieGUI:
         if theme_name == "clean":
             self.colors = CLEAN_COLORS.copy()
             self.fonts = CLEAN_FONTS.copy()
-            self.window.title("SOLLIE AI Assistant")
+            self.window.title("SOL AI Assistant")
         else:
             self.colors = CYBERDECK_COLORS.copy()
             self.fonts = CYBERDECK_FONTS.copy()
-            self.window.title("SOLLIE CYBERDECK")
+            self.window.title("SOL CYBERDECK")
 
         self.main_frame.destroy()
         self.setup_ui()
@@ -732,9 +736,9 @@ class SollieGUI:
         except ValueError:
             pass
 
-        config.setdefault("sollie", {})
-        config["sollie"]["name"] = self.settings_name.get().strip()
-        config["sollie"]["approval_required"] = self.settings_approval.get()
+        config.setdefault("sol", {})
+        config["sol"]["name"] = self.settings_name.get().strip()
+        config["sol"]["approval_required"] = self.settings_approval.get()
 
         config.setdefault("emotion", {})
         config["emotion"]["enabled"] = self.settings_emotion_enabled.get()
@@ -769,7 +773,7 @@ class SollieGUI:
             self.chat_display.insert("end", f"[{timestamp}] YOU: ", "user_name")
             self.chat_display.insert("end", f"{message}\n\n", "user_msg")
         elif msg_type == "assistant":
-            self.chat_display.insert("end", f"[{timestamp}] SOLLIE: ", "assistant_name")
+            self.chat_display.insert("end", f"[{timestamp}] SOL: ", "assistant_name")
             self.chat_display.insert("end", f"{message}\n\n", "assistant_msg")
         elif msg_type == "system":
             self.chat_display.insert("end", f"[{timestamp}] {sender}: ", "system_name")
@@ -788,7 +792,7 @@ class SollieGUI:
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".txt",
                 filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
-                initialfile=f"sollie_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                initialfile=f"sol_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
             )
             if file_path:
                 with open(file_path, 'w', encoding='utf-8') as f:
@@ -801,14 +805,38 @@ class SollieGUI:
         message = self.input_box.get().strip()
         if not message:
             return
-
+        
+        # Check if message contains image paste indicator
+        if "[Image" in message or "Cannot read" in message or "clipboard" in message.lower():
+            self.input_box.delete(0, "end")
+            self.add_message("YOU", "[Image paste attempt]", "user")
+            self.add_message("SOL", "Really, boss? I can't see images. I'm smart, not psychic. Try describing it in words instead.", "assistant")
+            return
+        
         self.input_box.delete(0, "end")
         self.add_message("YOU", message, "user")
         self.set_status("THINKING...", self.colors["warning"])
-
+        
         thread = threading.Thread(target=self.process_message, args=(message,))
         thread.daemon = True
         thread.start()
+    
+    def _handle_paste(self, event):
+        """Handle paste events to detect images"""
+        try:
+            import tkinter as tk
+            clipboard = self.window.clipboard_get()
+            # If clipboard is not text, it's likely an image
+            if not clipboard or len(clipboard) > 10000:  # Large content might be image data
+                self.input_box.delete(0, "end")
+                self.input_box.insert(0, "[Image paste not supported - I can't see images, boss]")
+                return "break"  # Prevent default paste
+        except Exception:
+            # Clipboard contains non-text (image)
+            self.input_box.delete(0, "end")
+            self.input_box.insert(0, "[Image paste not supported - describe it with words instead]")
+            return "break"
+        return None
 
     def process_message(self, message):
         try:
@@ -819,10 +847,10 @@ class SollieGUI:
             self.last_tool_confidence = tool_conf if isinstance(tool_conf, (int, float)) else None
 
             self.set_connection_status("ONLINE")
-            self.add_message("SOLLIE", result['response'], "assistant")
+            self.add_message("SOL", result['response'], "assistant")
 
             if result.get('follow_up'):
-                self.add_message("SOLLIE", f"[Follow-up: {result['follow_up']}]", "system")
+                self.add_message("SOL", f"[Follow-up: {result['follow_up']}]", "system")
 
             if result['action']:
                 self.pending_action = result['action']
@@ -849,7 +877,7 @@ class SollieGUI:
         
         ctk.CTkLabel(
             dialog,
-            text=f"Sollie wants to perform this action:\n\n{action_desc}",
+            text=f"Sol wants to perform this action:\n\n{action_desc}",
             wraplength=350,
             font=("Segoe UI", 12)
         ).pack(pady=(20, 10), padx=20)
@@ -932,10 +960,84 @@ class SollieGUI:
         try:
             cpu = psutil.cpu_percent(interval=0.5)
             ram = psutil.virtual_memory().percent
-            self.sysmon_label.configure(text=f"CPU: {cpu:.0f}% | RAM: {ram:.0f}%")
+            disk = psutil.disk_usage('/').percent
+            self.sysmon_label.configure(text=f"CPU: {cpu:.0f}% | RAM: {ram:.0f}% | Disk: {disk:.0f}%")
         except Exception:
             pass
         self.window.after(5000, self.update_system_monitor)
+
+    def _monitoring_loop(self):
+        """Background thread for proactive system monitoring"""
+        while True:
+            try:
+                if not self.monitoring_config.get("enabled", True):
+                    time.sleep(30)
+                    continue
+                
+                # Check quiet hours
+                if self._is_quiet_hours():
+                    time.sleep(60)
+                    continue
+                
+                # Get system metrics
+                cpu = psutil.cpu_percent(interval=1)
+                memory = psutil.virtual_memory().percent
+                disk = psutil.disk_usage('/').percent
+                
+                # Check thresholds and alert
+                self._check_and_alert("cpu", cpu, self.monitoring_config.get("cpu_percent", 85))
+                self._check_and_alert("memory", memory, self.monitoring_config.get("memory_percent", 85))
+                self._check_and_alert("disk", disk, self.monitoring_config.get("disk_percent", 90))
+                
+                # Sleep for configured interval
+                interval = self.monitoring_config.get("interval_sec", 30)
+                time.sleep(interval)
+            except Exception:
+                time.sleep(30)
+
+    def _is_quiet_hours(self):
+        """Check if current time is within quiet hours"""
+        try:
+            quiet = self.monitoring_config.get("quiet_hours", {})
+            start_str = quiet.get("start", "23:00")
+            end_str = quiet.get("end", "07:00")
+            
+            now = datetime.now().time()
+            start_time = datetime.strptime(start_str, "%H:%M").time()
+            end_time = datetime.strptime(end_str, "%H:%M").time()
+            
+            if start_time <= end_time:
+                return start_time <= now <= end_time
+            else:  # Crosses midnight
+                return now >= start_time or now <= end_time
+        except Exception:
+            return False
+
+    def _check_and_alert(self, metric, value, threshold):
+        """Check if metric exceeds threshold and send chat alert"""
+        if value <= threshold:
+            return
+        
+        # Check cooldown
+        now = time.time()
+        cooldown = self.proactive_config.get("cooldown_sec", 600)
+        last_alert = self.last_alert_time.get(metric, 0)
+        
+        if now - last_alert < cooldown:
+            return
+        
+        # Generate alert message
+        alert_messages = {
+            "cpu": f"Hey boss, your CPU is at {value:.0f}% - might want to close some apps.",
+            "memory": f"Boss, memory usage is at {value:.0f}%. System's getting heavy.",
+            "disk": f"Heads up - disk space is at {value:.0f}%. Time for some cleanup."
+        }
+        
+        message = alert_messages.get(metric, f"{metric} is at {value:.0f}%")
+        
+        # Post to chat via UI queue
+        self.enqueue_ui(self.add_message, "SOL", message, "system")
+        self.last_alert_time[metric] = now
 
     def animate_glow(self):
         self.glow_phase += 0.15
@@ -957,6 +1059,12 @@ class SollieGUI:
         self.update_time()
         self.update_system_monitor()
         self.check_connection_status()
+        self.monitoring_config = self.brain.config.get("monitoring", {})
+        self.proactive_config = self.brain.config.get("proactive_suggestions", {})
+        self.last_alert_time = {}
+        self.monitoring_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
+        if self.monitoring_config.get("enabled", True):
+            self.monitoring_thread.start()
 
     def check_connection_status(self):
         thread = threading.Thread(target=self._check_connection)
@@ -981,7 +1089,7 @@ class SollieGUI:
 
 
 def main():
-    gui = SollieGUI()
+    gui = SolGUI()
     gui.run()
 
 

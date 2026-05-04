@@ -1,5 +1,5 @@
 """
-Sollie GUI - Simplified Practical Interface
+Sol GUI - Simplified Practical Interface
 Clean, minimalist design with better readability
 """
 
@@ -15,7 +15,7 @@ import tkinter as tk
 from tkinter import filedialog
 from datetime import datetime
 import psutil
-from sollie_core import SollieBrain
+from sol_core import SolBrain
 
 # Modern, clean color scheme
 COLORS = {
@@ -47,9 +47,9 @@ FONTS = {
 }
 
 
-class SollieGUI:
+class SolGUI:
     def __init__(self):
-        self.brain = SollieBrain()
+        self.brain = SolBrain()
         self.pending_action = None
         self.pending_actions = []
         self.connection_status = "UNKNOWN"
@@ -62,7 +62,7 @@ class SollieGUI:
         
         # Setup window
         self.window = ctk.CTk()
-        self.window.title("SOLLIE - AI Assistant")
+        self.window.title("SOL - AI Assistant")
         self.window.geometry("1200x750")
         self.window.minsize(1200, 750)
         self.window.configure(fg_color=COLORS["bg"])
@@ -97,7 +97,7 @@ class SollieGUI:
         
         title = ctk.CTkLabel(
             header,
-            text="SOLLIE - Offline AI Assistant",
+            text="SOL - Offline AI Assistant",
             font=FONTS["title"],
             text_color=COLORS["accent"]
         )
@@ -257,7 +257,7 @@ class SollieGUI:
             self.chat_display.insert("end", f"[{timestamp}] You: ", "user_name")
             self.chat_display.insert("end", f"{message}\n\n", "user_msg")
         elif msg_type == "assistant":
-            self.chat_display.insert("end", f"[{timestamp}] Sollie: ", "assistant_name")
+            self.chat_display.insert("end", f"[{timestamp}] Sol: ", "assistant_name")
             self.chat_display.insert("end", f"{message}\n\n", "assistant_msg")
         elif msg_type == "system":
             self.chat_display.insert("end", f"[{timestamp}] System: ", "system_name")
@@ -273,7 +273,7 @@ class SollieGUI:
         self.chat_display.configure(state="disabled")
     
     def send_message(self):
-        """Send user message to Sollie"""
+        """Send user message to Sol"""
         message = self.input_box.get().strip()
         if not message:
             return
@@ -287,7 +287,7 @@ class SollieGUI:
         thread.start()
     
     def process_message(self, message):
-        """Process message with Sollie brain"""
+        """Process message with Sol brain"""
         try:
             start_time = time.monotonic()
             result = self.brain.chat(message)
@@ -296,7 +296,7 @@ class SollieGUI:
             self.last_tool_confidence = tool_conf if isinstance(tool_conf, (int, float)) else None
             
             self.set_connection_status("ONLINE")
-            self.add_message("Sollie", result['response'], "assistant")
+            self.add_message("Sol", result['response'], "assistant")
             
             if result['action']:
                 self.pending_action = result['action']
@@ -377,7 +377,7 @@ class SollieGUI:
 
 
 def main():
-    gui = SollieGUI()
+    gui = SolGUI()
     gui.run()
 
 
