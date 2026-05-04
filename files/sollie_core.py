@@ -591,7 +591,39 @@ class AgentLoop:
             except json.JSONDecodeError:
                 return None
 
-        return None
+        # Try to parse key-value format (key: 'value' or key: value)
+        result = {}
+        lines = text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not line or ':' not in line:
+                continue
+            
+            key, _, val_part = line.partition(':')
+            key = key.strip()
+            val_part = val_part.strip()
+            
+            # Remove quotes if present
+            if val_part.startswith("'") and val_part.endswith("'"):
+                val_part = val_part[1:-1]
+            elif val_part.startswith('"') and val_part.endswith('"'):
+                val_part = val_part[1:-1]
+            elif val_part.lower() == 'null':
+                val_part = None
+            elif val_part.lower() == 'true':
+                val_part = True
+            elif val_part.lower() == 'false':
+                val_part = False
+            else:
+                try:
+                    val_part = float(val_part) if '.' in val_part else int(val_part)
+                except (ValueError, TypeError):
+                    pass
+            
+            if key in ('response', 'reasoning', 'follow_up', 'tool_confidence', 'action'):
+                result[key] = val_part
+        
+        return result if result else None
 
     def parse_structured_response(self, response_text):
         payload = self._try_parse_json_payload(response_text)
