@@ -1,0 +1,80 @@
+[2026-05-06 03:13:42] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 119, in main
+    app = SolGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 116, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 127, in setup_ui
+    self.build_content_area()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 248, in build_content_area
+    self.build_sidebar()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 315, in build_sidebar
+    self.load_reminders()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 953, in load_reminders
+    config["lm_studio"]["api_url"] = self.settings_api_url.get().strip()
+                                     ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SolGUI' object has no attribute 'settings_api_url'
+
+[2026-05-06 03:13:57] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 119, in main
+    app = SolGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 116, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 127, in setup_ui
+    self.build_content_area()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 248, in build_content_area
+    self.build_sidebar()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 315, in build_sidebar
+    self.load_reminders()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 953, in load_reminders
+    config["lm_studio"]["api_url"] = self.settings_api_url.get().strip()
+                                     ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SolGUI' object has no attribute 'settings_api_url'
+
+[2026-05-06 03:58:54] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 119, in main
+    app = SolGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 98, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 193, in setup_ui
+    quick_button("Open Downloads", "Open Downloads folder", alt=True).pack(padx=14, pady=4, fill="x")
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 187, in quick_button
+    hover_color=COLORS["accent_alt_hover"] if alt else COLORS["accent_hover"],
+                ~~~~~~^^^^^^^^^^^^^^^^^^^^
+KeyError: 'accent_alt_hover'
+
+[2026-05-06 03:59:09] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 119, in main
+    app = SolGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 98, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 193, in setup_ui
+    quick_button("Open Downloads", "Open Downloads folder", alt=True).pack(padx=14, pady=4, fill="x")
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 187, in quick_button
+    hover_color=COLORS["accent_alt_hover"] if alt else COLORS["accent_hover"],
+                ~~~~~~^^^^^^^^^^^^^^^^^^^^
+KeyError: 'accent_alt_hover'
+

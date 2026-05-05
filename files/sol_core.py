@@ -239,7 +239,7 @@ class PersonalityManager:
         tone_map = {
             "playful": "Light, whimsical, and a bit cheeky. Maybe crack a gentle joke or use playful language.",
             "snarky": "Dry and sarcastic. Make a witty comment about the situation if appropriate, but never mean.",
-            "dry": "Minimal words. Slightly bored tone. Use '*sigh*' or '*eye roll*' if it fits.",
+            "dry": "Minimal words. Slightly bored tone. Use '*sigh*', or '*eye roll*' if it fits.",
             "upbeat": "Positive and encouraging. Lightly higher energy. Show genuine enthusiasm.",
             "warm": "Friendly and companion-like. Add small supportive touches and personal connections.",
             "focused": "Direct and task-first. Reduce small talk. Get to the point quickly.",
@@ -565,42 +565,48 @@ class ToolManager:
         # Reminders
         if "remind me" in user_lower or "set a reminder" in user_lower:
             # Try to extract time and message
-            time_match = re.search(r"in\s+(\d+)\s+(minute|hour|hr)s?", user_lower)
-            message_match = re.search(r"remind me\s+(?:in\s+\d+\s+(?:minute|hour|hr)s?\s+)?(?:to\s+)?(.+)", user_lower)
-            
-            delay_minutes = None
+            time_match = re.search(r"in\s+(\d+)\s+(second|sec|minute|min|hour|hr)s?", user_lower)
+            message_match = re.search(r"remind me\s+(?:in\s+[\w\s]+\s+)?(?:to\s+|about\s+)?(.+?)(?:\?|$)", user_lower)
+
+            delay_seconds = None
             message = None
-            
+
             if time_match:
                 amount = int(time_match.group(1))
                 unit = time_match.group(2)
-                delay_minutes = amount if "minute" in unit else amount * 60
-            
+                if "second" in unit or "sec" in unit:
+                    delay_seconds = amount
+                elif "minute" in unit or "min" in unit:
+                    delay_seconds = amount * 60
+                elif "hour" in unit or "hr" in unit:
+                    delay_seconds = amount * 3600
+
             if message_match:
                 message = message_match.group(1).strip()
                 # Clean up message
                 message = message.rstrip("?.,!")
-            
-            if message and delay_minutes:
+
+            if message and delay_seconds:
+                delay_minutes = delay_seconds / 60
                 return {
                     "type": "set_reminder",
                     "params": {"message": message, "delay_minutes": delay_minutes},
-                    "description": f"Set reminder: {message} in {delay_minutes} min"
+                    "description": f"Set reminder: {message} in {delay_seconds}s"
                 }
             elif message:
                 return {
                     "type": "set_reminder",
-                    "params": {"message": message, "delay_minutes": 30},  # Default 30 min
+                    "params": {"message": message, "delay_minutes": 30},  # Default 30, min
                     "description": f"Set reminder: {message}"
                 }
-        
+
         if "list reminders" in user_lower or "show reminders" in user_lower or "my reminders" in user_lower:
             return {
                 "type": "list_reminders",
                 "params": {},
                 "description": "List all reminders"
             }
-        
+
         if "check reminders" in user_lower or "any reminders" in user_lower:
             return {
                 "type": "check_reminders",
@@ -614,7 +620,7 @@ class ToolManager:
         if action_type in ["open_file", "create_file"]:
             name = Path(str(params.get("filepath", ""))).name
             if name:
-                return f"{action_type.replace('_', ' ').title()}: {name}"
+                return f"{action_type.replace('_', ', ').title()}: {name}"
 
         if action_type == "open_application":
             name = Path(str(params.get("app_name", ""))).stem
@@ -644,7 +650,7 @@ class ToolManager:
             if directory:
                 return f"List files: {directory}"
 
-        return action_type.replace("_", " ").title()
+        return action_type.replace("_", ", ").title()
 
     def normalize_action(self, action):
         if not isinstance(action, dict):
@@ -768,7 +774,7 @@ class AgentLoop:
         if not isinstance(text, str) or not text.strip().startswith("{"):
             return None
         try:
-            fixed = re.sub(r'(\{|\,)\s*([a-zA-Z_][a-zA-Z_0-9]*)\s*:', r'\1 "\2":', text)
+            fixed = re.sub(r'(\{|\,)\s*([a-zA-Z_][a-zA-Z_0-9]*)\s*:', r'\1, "\2":', text)
             return json.loads(fixed)
         except (json.JSONDecodeError, Exception):
             return None
@@ -846,8 +852,7 @@ class AgentLoop:
         if curiosity_active:
             curiosity_style = "snarky" if mood_label in ["snarky", "dry"] else "gentle"
             curiosity_msg = (
-                f"Curiosity mode: Ask one short follow-up question to learn more. "
-                f"Be {curiosity_style} in your approach. Ask at most one question."
+                f"Curiosity mode: Ask one short follow-up question to learn more. Be {curiosity_style} in your approach. Ask at most one question."
             )
             messages.append({
                 "role": "system",
@@ -938,10 +943,7 @@ class AgentLoop:
         max_steps = agent_config.get("max_steps", 5)
 
         system_prompt = (
-            "You are Sol, a careful planner. Create a short step-by-step plan "
-            f"with at most {max_steps} steps. Return JSON only with keys: "
-            "steps (array of strings), assumptions (array of strings), "
-            "clarifying_questions (array of strings)."
+            "You are Sol, a careful planner. Create a short step-by-step plan ", f"with at most {max_steps} steps. Return JSON only with keys: ", "steps (array of strings), assumptions (array of strings), ", "clarifying_questions (array of strings)."
         )
 
         messages = [
@@ -1130,9 +1132,7 @@ class SolCore:
             conversation_text = conversation_text[-2000:]
 
         summary_prompt = (
-            "Summarize this conversation concisely in 2-3 sentences. "
-            "Focus on key topics, decisions, and important context:\n\n"
-            f"{conversation_text}"
+            "Summarize this conversation concisely in 2-3 sentences. ", "Focus on key topics, decisions, and important context:\n\n", f"{conversation_text}"
         )
 
         try:
@@ -1147,11 +1147,11 @@ class SolCore:
         self.memory.add_message("user", user_message)
 
         # Pre-check for image-related messages to avoid model errors
-        image_indicators = ["[image", "cannot read", "clipboard", "image input", "does not support", "model does not"]
+        image_indicators = ["[image", "cant read", "clipboard", "image input", "does not support", "model does not"]
         if any(indicator in user_message.lower() for indicator in image_indicators):
             import random
             snarky_responses = [
-                "Boss, I literally can't see images. We've been over this. Describe it with words.",
+                "Boss, I literally cant see images. We've been over this. Describe it with words.",
                 "*sigh* Still text-only, remember? What's in the image?",
                 "Really? I.can't.see.images. The first rule of Sol, boss.",
                 "Boss, are you testing my patience? I.can't.see.images. Use words."
@@ -1161,10 +1161,21 @@ class SolCore:
                 "response": random.choice(snarky_responses),
                 "action": None,
                 "needs_approval": False,
-                "reasoning": "User tried to send an image despite being told I can't see them",
+                "reasoning": "User tried to send an image despite being told I cant see them",
                 "follow_up": "",
                 "tool_confidence": 1
             }
+
+        # PRE-DETECT and execute tools BEFORE calling LLM
+        action = self.tool_manager.detect_action_intent(user_message, "")
+        action_result = None
+        tool_context = ""
+
+        if action and not self.approval_required:
+            action_result = self.tool_manager.execute_action(action)
+            tool_context = self._format_tool_result(action, action_result)
+        elif action and self.approval_required:
+            self._pending_action = action
 
         explicit_items = self.extract_explicit_memory_items(user_message)
         mood_state = self.personality_manager.update_mood_state(user_message)
@@ -1195,7 +1206,9 @@ class SolCore:
 
         try:
             mood_prompt = self.personality_manager.get_mood_prompt(mood_state)
-            result = self.agent_loop.run_chat(
+            
+            # Build messages with tool context if available
+            messages = self.agent_loop.build_messages(
                 personality=self.personality,
                 mood_prompt=mood_prompt,
                 summary=summary,
@@ -1205,9 +1218,19 @@ class SolCore:
                 history=history,
                 curiosity_active=curiosity_active
             )
+            
+            # Add tool result context if available
+            if tool_context:
+                messages.append({
+                    "role": "system", 
+                    "content": f"Tool result (use this real data in your response): {tool_context}"
+                })
+            
+            # Call LLM with tool context
+            response_text = self.llm_client.chat(messages)
+            result = self.agent_loop.parse_structured_response(response_text)
 
             response = result.get("response", "")
-            action = result.get("action")
             reasoning = result.get("reasoning", "")
             follow_up = result.get("follow_up", "")
             tool_confidence = result.get("tool_confidence")
@@ -1216,18 +1239,14 @@ class SolCore:
             proactive_alert = self._check_proactive_alerts()
             if proactive_alert:
                 response = proactive_alert + "\n\n" + response
-                result["response"] = response
-
-            if not action:
-                action = self.tool_manager.detect_action_intent(user_message, response)
 
             self.memory.add_message("assistant", response)
-
             self.postprocess_memory(user_message, response)
 
             return {
                 "response": response,
                 "action": action,
+                "action_result": action_result,
                 "needs_approval": action is not None and self.approval_required,
                 "reasoning": reasoning,
                 "follow_up": follow_up,
@@ -1244,6 +1263,54 @@ class SolCore:
                 "tool_confidence": None
             }
 
+    def _format_tool_result(self, action, action_result):
+        """Format tool result for LLM context"""
+        if not action_result:
+            return ""
+        
+        tool_type = action.get("type", "") if isinstance(action, dict) else ""
+        params = action.get("params", {}) if isinstance(action, dict) else {}
+        result = action_result or {}
+        
+        # Format result based on tool type
+        if tool_type == "web_search" and result.get("success"):
+            results = result.get("results", [])
+            if results:
+                return "Search results:\n" + "\n".join([
+                    f"- {r.get('title', '')}: {r.get('href', '')}" 
+                    for r in results[:3]
+                ])
+        elif tool_type == "get_weather" and result.get("success"):
+            weather = result.get("weather", {})
+            return f"Weather in {weather.get('location', 'Unknown')}: {weather.get('simple', '')}"
+        elif tool_type == "get_news_headlines" and result.get("success"):
+            headlines = result.get("headlines", [])
+            if headlines:
+                return "News headlines:\n" + "\n".join([
+                    f"- {h.get('title', '')}" for h in headlines[:5]
+                ])
+        elif tool_type == "set_reminder" and result.get("success"):
+            return f"Reminder set: {params.get('message', '')}"
+        elif tool_type == "list_reminders" and result.get("success"):
+            reminders = result.get("reminders", [])
+            if reminders:
+                return "Your reminders:\n" + "\n".join([
+                    f"- {r.get('message', '')} (due {r.get('remind_at', '')})" 
+                    for r in reminders
+                ])
+            else:
+                return "No pending reminders."
+        elif tool_type == "check_reminders" and result.get("success"):
+            due = result.get("due", [])
+            if due:
+                return "Due reminders:\n" + "\n".join([
+                    f"- {r.get('message', '')}" for r in due
+                ])
+            else:
+                return "No due reminders."
+        else:
+            return f"Action completed: {result.get('message', result.get('error', 'Done'))}"
+
     def _check_proactive_alerts(self):
         """Check for system alerts and return a proactive message if needed"""
         now = time.time()
@@ -1258,22 +1325,19 @@ class SolCore:
         # Check CPU
         if self.monitor.should_escalate("cpu", metrics):
             alert_messages.append(
-                f"*sigh* Boss, your CPU has been cooking at {metrics['cpu_percent']:.1f}% for a while now. "
-                f"Want me to show you what's hogging it?"
+                f"*sigh* Boss, your CPU has been cooking at {metrics['cpu_percent']:.1f}% for a while now. ", f"Want me to show you what's hogging it?"
             )
         
         # Check Memory
         if self.monitor.should_escalate("memory", metrics):
             alert_messages.append(
-                f"Hey, memory is at {metrics['memory_percent']:.1f}% ({metrics['memory_used_gb']:.1f}GB used). "
-                f"Things might get sluggish. Should I list the top memory hogs?"
+                f"Hey, memory is at {metrics['memory_percent']:.1f}% ({metrics['memory_used_gb']:.1f}GB used). ", f"Things might get sluggish. Should I list the top memory hogs?"
             )
         
         # Check Disk
         if self.monitor.should_escalate("disk", metrics):
             alert_messages.append(
-                f"Disk space is getting tight - {metrics['disk_percent']:.1f}% full "
-                f"({metrics['disk_free_gb']:.1f}GB free). Might want to clean up."
+                f"Disk space is getting tight - {metrics['disk_percent']:.1f}% full ", f"({metrics['disk_free_gb']:.1f}GB free). Might want to clean up."
             )
         
         # Check Battery (if on laptop)
@@ -1283,8 +1347,71 @@ class SolCore:
             )
         
         if alert_messages:
-            return " ".join(alert_messages)
+            return ", ".join(alert_messages)
         return None
+
+    def _generate_response_with_tool_result(self, user_message, action, action_result, mood_prompt):
+        """Generate a response that incorporates tool result data"""
+        try:
+            # Build a context-aware prompt with the tool result
+            tool_type = action.get("type", "")
+            params = action.get("params", {})
+            result = action_result or {}
+            
+            # Format result based on tool type
+            result_text = ""
+            if tool_type == "web_search" and result.get("success"):
+                results = result.get("results", [])
+                if results:
+                    result_text = "Search results:\n" + "\n".join([
+                        f"- {r.get('title', '')}: {r.get('href', '')}" 
+                        for r in results[:3]
+                    ])
+            elif tool_type == "get_weather" and result.get("success"):
+                weather = result.get("weather", {})
+                result_text = (f"Weather in {weather.get('location', 'Unknown')}: ", f"{weather.get('temperature_c', 0)}°C, {weather.get('description', '')}")
+            elif tool_type == "get_news_headlines" and result.get("success"):
+                headlines = result.get("headlines", [])
+                if headlines:
+                    result_text = "News headlines:\n" + "\n".join([
+                        f"- {h.get('title', '')}" for h in headlines[:5]
+                    ])
+            elif tool_type == "set_reminder" and result.get("success"):
+                result_text = f"Reminder set: {params.get('message', '')}"
+            elif tool_type == "list_reminders" and result.get("success"):
+                reminders = result.get("reminders", [])
+                if reminders:
+                    result_text = "Your reminders:\n" + "\n".join([
+                        f"- {r.get('message', '')} (due {r.get('remind_at', '')}" 
+                        for r in reminders
+                    ])
+                else:
+                    result_text = "No pending reminders."
+            elif tool_type == "check_reminders" and result.get("success"):
+                due = result.get("due", [])
+                if due:
+                    result_text = "Due reminders:\n" + "\n".join([
+                        f"- {r.get('message', '')}" for r in due
+                    ])
+                else:
+                    result_text = "No due reminders."
+            else:
+                result_text = f"Action completed: {result.get('message', result.get('error', 'Done'))}"
+            
+            # Generate response using LLM with tool result context
+            messages = [
+                {"role": "system", "content": self.personality},
+                {"role": "system", "content": mood_prompt} if mood_prompt else None,
+                {"role": "user", "content": user_message},
+                {"role": "system", "content": f"Tool result: {result_text}"},
+                {"role": "system", "content": "Respond naturally to the user incorporating this tool result. Keep your personality."}
+            ]
+            messages = [m for m in messages if m is not None]
+            
+            response = self.llm_client.chat(messages)
+            return response if response else result_text
+        except Exception:
+            return str(action_result) if action_result else "Action completed"
 
     def call_lm_studio(self, messages):
         return self.llm_client.chat(messages)
@@ -1400,9 +1527,7 @@ class SolCore:
             return ""
 
         system_prompt = (
-            "You are a memory interpreter. Given the user's message and memory items, "
-            "produce a short, helpful memory insight that will improve the assistant's response. "
-            "Do not list raw items. Merge and paraphrase. Keep it to 1-3 short sentences."
+            "You are a memory interpreter. Given the user's message and memory items, ", "produce a short, helpful memory insight that will improve the assistant's response. ", "Do not list raw items. Merge and paraphrase. Keep it to 1-3 short sentences."
         )
 
         messages = [
@@ -1461,7 +1586,7 @@ class SolCore:
             "humor_tolerance": "Humor",
             "other": "Other"
         }
-        return mapping.get(memory_type, memory_type.replace("_", " ").title())
+        return mapping.get(memory_type, memory_type.replace("_", ", ").title())
 
     def rank_memory_items(self, user_message, memory_items, top_k, min_score):
         query_tokens = self.tokenize_for_memory(user_message)
@@ -1584,10 +1709,7 @@ class SolCore:
         profile = self.memory.get_user_profile()
 
         system_prompt = (
-            "You are a precise extraction engine. From the exchange, extract NEW facts "
-            "about the user. Return JSON only with keys: preferences, project_context, "
-            "personal_context, working_patterns, humor_tolerance, goals, other. "
-            "Each value is an array of short strings. If no new facts, return empty arrays."
+            "You are a precise extraction engine. From the exchange, extract NEW facts ", "about the user. Return JSON only with keys: preferences, project_context, ", "personal_context, working_patterns, humor_tolerance, goals, other. ", "Each value is an array of short strings. If no new facts, return empty arrays."
         )
 
         messages = [
@@ -1616,10 +1738,7 @@ class SolCore:
 
         existing_memory = self.memory.get_user_memory(limit=memory_config.get("user_memory_limit", 50))
         system_prompt = (
-            "You are a memory extraction engine. Extract durable, long-term facts about the user "
-            "that will matter in future sessions. Ignore one-off tasks, temporary states, or "
-            "time-bound details. Return JSON only as an array of objects with keys: type, value. "
-            f"Return at most {max_items} items. If nothing new, return []."
+            "You are a memory extraction engine. Extract durable, long-term facts about the user ", "that will matter in future sessions. Ignore one-off tasks, temporary states, or ", "time-bound details. Return JSON only as an array of objects with keys: type, value. ", f"Return at most {max_items} items. If nothing new, return []."
         )
 
         messages = [
@@ -1656,8 +1775,7 @@ class SolCore:
             return
 
         system_prompt = (
-            "Summarize the conversation in concise bullet points with key decisions, "
-            "topics, and outcomes. Keep it under the requested length."
+            "Summarize the conversation in concise bullet points with key decisions, ", "topics, and outcomes. Keep it under the requested length."
         )
 
         summary_messages = [

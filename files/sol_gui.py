@@ -1,6 +1,6 @@
 """
-Sol GUI - Enhanced Edition
-Cyberpunk aesthetic with settings panel, chat history sidebar, theme switcher, and system monitor
+Sol GUI - Cyberdeck Edition
+Cyberpunk aesthetic with practical, clean layout
 """
 
 import customtkinter as ctk
@@ -11,50 +11,39 @@ import time
 import re
 import json
 import math
+import random
 import tkinter as tk
 from tkinter import filedialog
 from datetime import datetime
 import psutil
 from sol_core import SolBrain
-from sol_monitor import SolMonitor
 
-CYBERDECK_COLORS = {
+# Cyberpunk neon color scheme
+COLORS = {
     "bg": "#0a0e27",
     "panel": "#0f1419",
     "panel_alt": "#151b2f",
+    "panel_glow": "#1a2847",
     "outline": "#1a2847",
     "outline_bright": "#2a4a7f",
-    "text": "#b8e6cc",
+    "text": "#00ff88",
     "text_alt": "#e0e6ff",
     "muted": "#4a6fa0",
-    "accent": "#66ffaa",
-    "accent_alt": "#ff66a3",
+    "accent": "#00ff88",
+    "accent_alt": "#ff006e",
     "accent_hover": "#00cc6a",
-    "warning": "#ffff99",
-    "danger": "#ff4466",
-    "info": "#66d9ef",
-    "success": "#66ffaa",
+    "accent_alt_hover": "#cc0058",
+    "warning": "#ffff00",
+    "danger": "#ff0044",
+    "info": "#00ccff",
+    "success": "#00ff88",
+    "grid": "#1a2847",
+    "scanline": "#00ff88",
+    "scanline_glow": "#00ff88",
 }
 
-CLEAN_COLORS = {
-    "bg": "#1e1e1e",
-    "panel": "#252526",
-    "panel_alt": "#2d2d2d",
-    "outline": "#3e3e42",
-    "outline_bright": "#5a5a5f",
-    "text": "#d4d4d4",
-    "text_alt": "#e0e0e0",
-    "muted": "#a0a0a0",
-    "accent": "#007acc",
-    "accent_alt": "#4ec9b0",
-    "accent_hover": "#0095f7",
-    "warning": "#f1d000",
-    "danger": "#f44747",
-    "info": "#3aa5ff",
-    "success": "#2d9d78",
-}
-
-CYBERDECK_FONTS = {
+# Cyberpunk fonts
+FONTS = {
     "title": ("Courier New", 24, "bold"),
     "subtitle": ("Courier New", 14),
     "section": ("Courier New", 16, "bold"),
@@ -65,1294 +54,1745 @@ CYBERDECK_FONTS = {
     "code": ("Consolas", 13)
 }
 
-CLEAN_FONTS = {
-    "title": ("Segoe UI", 20, "bold"),
-    "subtitle": ("Segoe UI", 14),
-    "section": ("Segoe UI", 14, "bold"),
-    "body": ("Segoe UI", 14),
-    "body_bold": ("Segoe UI", 14, "bold"),
-    "caption": ("Segoe UI", 12),
-    "code": ("Consolas", 13)
-}
-
 
 class SolGUI:
     def __init__(self):
+        # Initialize Sol brain
         self.brain = SolBrain()
         self.pending_action = None
-        self.pending_actions = []  # Queue for multiple pending actions
+        self.pending_actions = []
+        self.last_suggestion_time = 0
+        self.last_assistant_message = ""
         self.connection_status = "UNKNOWN"
         self.config_path = os.path.join(os.path.dirname(__file__), "config.json")
+        self.scanline_y = 0
+        self.scanline_speed = 1
+        self.glow_phase = 0.0
         self.last_response_seconds = None
         self.last_tool_confidence = None
-        self.glow_phase = 0.0
-        self.current_theme = "cyberdeck"
-        self.sidebar_visible = True
-        self.settings_visible = False
-        self._switching_theme = False
+        self.last_gpu_refresh = 0.0
+        self.gpu_name = "N/A"
+        self.gpu_vram_gb = None
+        self.flicker_targets = {}
+        self.current_status_color = COLORS["success"]
+        self.current_connection_color = COLORS["warning"]
 
         agent_config = self.brain.config.get("agent", {})
-        self.task_enabled = bool(agent_config.get("enabled", True))
+        monitoring_config = self.brain.config.get("monitoring", {})
+        suggestions_config = self.brain.config.get("proactive_suggestions", {})
 
+        self.task_enabled = bool(agent_config.get("enabled", True))
+        self.monitoring_enabled = bool(monitoring_config.get("enabled", False))
+        self.suggestions_enabled = bool(suggestions_config.get("enabled", False))
+        self.auto_queue_enabled = bool(suggestions_config.get("auto_queue_actions", False))
+        
+        # Setup window
         self.window = ctk.CTk()
-        self.window.title("SOL AI Assistant")
+        self.window.title("⚡ Sol CYBERDECK ⚡")
         self.window.geometry("1400x850")
-        self.window.minsize(1200, 700)
+        self.window.minsize(1400, 850)
+        self.window.configure(fg_color=COLORS["bg"])
 
         self.ui_queue = queue.Queue()
         self.window.after(100, self.process_ui_queue)
-
+        
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
-
-        self.colors = CYBERDECK_COLORS.copy()
-        self.fonts = CYBERDECK_FONTS.copy()
-
+        
+        self.glow_phase = 0.0
+        
         self.setup_ui()
         self.start_monitoring()
-        self.animate_glow()
-
+        self.animate_cyberdeck()
+        
     def setup_ui(self):
-        self.main_frame = ctk.CTkFrame(self.window, fg_color="transparent")
-        self.main_frame.pack(fill="both", expand=True, padx=0, pady=0)
-        self.main_frame.grid_columnconfigure(0, weight=1)
-        self.main_frame.grid_rowconfigure(1, weight=1)
+        """Setup the user interface"""
 
-        self.build_header()
-        self.build_content_area()
-
-    def build_header(self):
-        header = ctk.CTkFrame(
-            self.main_frame,
-            fg_color=self.colors["panel_alt"],
-            corner_radius=0,
-            border_width=2,
-            border_color=self.colors["accent"]
+        # Cyberdeck background
+        self.background = tk.Canvas(
+            self.window,
+            highlightthickness=0,
+            bg=COLORS["bg"]
         )
-        header.grid(row=0, column=0, sticky="ew", padx=0, pady=0)
-        header.grid_columnconfigure(1, weight=1)
+        self.background.place(relx=0, rely=0, relwidth=1, relheight=1)
 
-        header_left = ctk.CTkFrame(header, fg_color="transparent")
-        header_left.grid(row=0, column=0, sticky="w", padx=20, pady=10)
-
-        self.title_label = ctk.CTkLabel(
-            header_left,
-            text="SOL AI ASSISTANT",
-            font=self.fonts["title"],
-            text_color=self.colors["accent"]
+        # Main container (glass panel)
+        main_frame = ctk.CTkFrame(
+            self.window,
+            fg_color="transparent",
+            corner_radius=0
         )
-        self.title_label.pack(side="left")
+        main_frame.pack(fill="both", expand=True)
+        main_frame.grid_columnconfigure(1, weight=1)
+        main_frame.grid_rowconfigure(0, weight=1)
 
-        header_right = ctk.CTkFrame(header, fg_color="transparent")
-        header_right.grid(row=0, column=1, sticky="e", padx=20, pady=10)
-
-        self.theme_var = tk.StringVar(value="cyberdeck")
-        theme_dropdown = ctk.CTkOptionMenu(
-            header_right,
-            variable=self.theme_var,
-            values=["cyberdeck", "clean"],
-            command=self.switch_theme,
-            fg_color=self.colors["panel"],
-            button_color=self.colors["outline_bright"],
-            button_hover_color=self.colors["accent"],
-            text_color=self.colors["text_alt"],
-            font=self.fonts["caption"],
-            width=120,
-            height=30
+        # Sidebar
+        sidebar = ctk.CTkFrame(
+            main_frame,
+            width=230,
+            fg_color=COLORS["panel_alt"],
+            corner_radius=18,
+            border_width=1,
+            border_color=COLORS["outline_bright"]
         )
-        theme_dropdown.pack(side="left", padx=(0, 10))
+        sidebar.grid(row=0, column=0, sticky="nsw", padx=(12, 6), pady=12)
 
-        self.sysmon_label = ctk.CTkLabel(
-            header_right,
-            text="CPU: --% | RAM: --%",
-            font=self.fonts["caption"],
-            text_color=self.colors["info"]
+        brand = ctk.CTkLabel(
+            sidebar,
+            text="SOL",
+            font=FONTS["title"],
+            text_color=COLORS["accent"]
         )
-        self.sysmon_label.pack(side="left", padx=(0, 10))
+        brand.pack(padx=16, pady=(18, 4), anchor="w")
 
-        indicators = ctk.CTkFrame(header_right, fg_color="transparent")
-        indicators.pack(side="left", padx=(0, 10))
+        tagline = ctk.CTkLabel(
+            sidebar,
+            text="Offline neural assistant",
+            font=FONTS["subtitle"],
+            text_color=COLORS["muted"]
+        )
+        tagline.pack(padx=16, pady=(0, 12), anchor="w")
 
+        status_frame = ctk.CTkFrame(
+            sidebar,
+            fg_color=COLORS["panel"],
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
+        status_frame.pack(fill="x", padx=14, pady=(0, 12))
         self.status_label = ctk.CTkLabel(
-            indicators,
+            status_frame,
             text="READY",
-            font=self.fonts["body_bold"],
-            text_color=self.colors["success"]
+            font=FONTS["body_bold"],
+            text_color=COLORS["success"]
         )
-        self.status_label.pack(side="left", padx=10)
-
+        self.status_label.pack(padx=12, pady=(10, 2), anchor="w")
         self.connection_label = ctk.CTkLabel(
-            indicators,
-            text="LM: OFFLINE",
-            font=self.fonts["caption"],
-            text_color=self.colors["danger"]
+            status_frame,
+            text="LM: UNKNOWN",
+            font=FONTS["caption"],
+            text_color=COLORS["muted"]
         )
-        self.connection_label.pack(side="left", padx=10)
+        self.connection_label.pack(padx=12, pady=(0, 10), anchor="w")
 
-        self.time_label = ctk.CTkLabel(
-            indicators,
-            text="00:00:00",
-            font=self.fonts["caption"],
-            text_color=self.colors["info"]
+        quick_label = ctk.CTkLabel(
+            sidebar,
+            text="Quick Actions",
+            font=FONTS["section"],
+            text_color=COLORS["muted"]
         )
-        self.time_label.pack(side="left", padx=10)
+        quick_label.pack(padx=16, pady=(4, 6), anchor="w")
+
+        def quick_button(title, message, alt=False):
+            return ctk.CTkButton(
+                sidebar,
+                text=title,
+                command=lambda: self.send_quick_message(message),
+                fg_color=COLORS["accent_alt"] if alt else COLORS["accent"],
+                hover_color=COLORS["accent_alt_hover"] if alt else COLORS["accent_hover"],
+                text_color=COLORS["bg"],
+                height=34
+            )
+
+        quick_button("List Desktop", "List my Desktop files").pack(padx=14, pady=4, fill="x")
+        quick_button("Open Downloads", "Open Downloads folder", alt=True).pack(padx=14, pady=4, fill="x")
+        quick_button("Open Documents", "Open Documents folder").pack(padx=14, pady=4, fill="x")
+        quick_button("System Status", "What's my PC status?", alt=True).pack(padx=14, pady=4, fill="x")
+
+        pulse_frame = ctk.CTkFrame(
+            sidebar,
+            fg_color=COLORS["panel"],
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
+        pulse_frame.pack(fill="x", padx=14, pady=(12, 10))
+        pulse_label = ctk.CTkLabel(
+            pulse_frame,
+            text="System Pulse",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        )
+        pulse_label.pack(padx=12, pady=(10, 6), anchor="w")
+
+        def metric_row(parent, title, color):
+            row = ctk.CTkFrame(parent, fg_color=COLORS["panel_alt"], corner_radius=0)
+            row.pack(fill="x", padx=12, pady=(0, 8))
+            label = ctk.CTkLabel(
+                row,
+                text=f"{title}: 0%",
+                font=FONTS["caption"],
+                text_color=COLORS["text"]
+            )
+            label.pack(anchor="w")
+            bar = ctk.CTkProgressBar(
+                row,
+                height=8,
+                fg_color=COLORS["panel"],
+                progress_color=color
+            )
+            bar.pack(fill="x", pady=(4, 0))
+            bar.set(0)
+            return label, bar
+
+        self.cpu_label, self.cpu_bar = metric_row(pulse_frame, "CPU", COLORS["accent"])
+        self.mem_label, self.mem_bar = metric_row(pulse_frame, "Memory", COLORS["accent_alt"])
+        self.disk_label, self.disk_bar = metric_row(pulse_frame, "Disk", COLORS["info"])
+
+        telemetry_frame = ctk.CTkFrame(
+            sidebar,
+            fg_color=COLORS["panel"],
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
+        telemetry_frame.pack(fill="x", padx=14, pady=(0, 10))
+        telemetry_label = ctk.CTkLabel(
+            telemetry_frame,
+            text="Neural Telemetry",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        )
+        telemetry_label.pack(padx=12, pady=(10, 6), anchor="w")
+
+        def telemetry_row(parent, title, value):
+            row = ctk.CTkFrame(parent, fg_color=COLORS["panel_alt"], corner_radius=0)
+            row.pack(fill="x", padx=12, pady=(0, 8))
+            label = ctk.CTkLabel(
+                row,
+                text=f"{title}: {value}",
+                font=FONTS["caption"],
+                text_color=COLORS["text"]
+            )
+            label.pack(anchor="w")
+            return label
+
+        self.telemetry_labels = {
+            "uplink": telemetry_row(telemetry_frame, "Uplink", "UNKNOWN"),
+            "latency": telemetry_row(telemetry_frame, "Latency", "--"),
+            "confidence": telemetry_row(telemetry_frame, "Tool Conf", "--"),
+            "context": telemetry_row(telemetry_frame, "Context", "--"),
+            "gpu": telemetry_row(telemetry_frame, "GPU", "N/A"),
+            "vram": telemetry_row(telemetry_frame, "VRAM", "--")
+        }
+
+        deck_frame = ctk.CTkFrame(
+            sidebar,
+            fg_color=COLORS["panel"],
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
+        deck_frame.pack(fill="x", padx=14, pady=(0, 10))
+        deck_label = ctk.CTkLabel(
+            deck_frame,
+            text="Control Deck",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        )
+        deck_label.pack(padx=12, pady=(10, 4), anchor="w")
+
+        self.task_var = tk.BooleanVar(value=self.task_enabled)
+        self.monitor_var = tk.BooleanVar(value=self.monitoring_enabled)
+        self.suggest_var = tk.BooleanVar(value=self.suggestions_enabled)
+        self.auto_queue_var = tk.BooleanVar(value=self.auto_queue_enabled)
+
+        switch_style = {
+            "fg_color": COLORS["outline"],
+            "progress_color": COLORS["accent"],
+            "button_color": COLORS["panel_glow"],
+            "button_hover_color": COLORS["accent_hover"],
+            "text_color": COLORS["text"]
+        }
+
+        ctk.CTkSwitch(
+            deck_frame,
+            text="Task Mode",
+            variable=self.task_var,
+            command=self.toggle_task_mode,
+            **switch_style
+        ).pack(padx=12, pady=4, anchor="w")
+        ctk.CTkSwitch(
+            deck_frame,
+            text="Monitoring",
+            variable=self.monitor_var,
+            command=self.toggle_monitoring,
+            **switch_style
+        ).pack(padx=12, pady=4, anchor="w")
+        ctk.CTkSwitch(
+            deck_frame,
+            text="Suggestions",
+            variable=self.suggest_var,
+            command=self.toggle_suggestions,
+            **switch_style
+        ).pack(padx=12, pady=4, anchor="w")
+        ctk.CTkSwitch(
+            deck_frame,
+            text="Auto-Queue",
+            variable=self.auto_queue_var,
+            command=self.toggle_auto_queue,
+            **switch_style
+        ).pack(padx=12, pady=(4, 10), anchor="w")
+
+        queue_frame = ctk.CTkFrame(
+            sidebar,
+            fg_color=COLORS["panel"],
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS["outline"]
+        )
+        queue_frame.pack(fill="x", padx=14, pady=(0, 10))
+        queue_label = ctk.CTkLabel(
+            queue_frame,
+            text="Action Queue",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        )
+        queue_label.pack(padx=12, pady=(10, 4), anchor="w")
+        self.queue_status = ctk.CTkLabel(
+            queue_frame,
+            text="No pending actions.",
+            font=FONTS["caption"],
+            text_color=COLORS["muted"],
+            justify="left"
+        )
+        self.queue_status.pack(padx=12, pady=(0, 10), anchor="w")
+
+        spacer = ctk.CTkFrame(sidebar, fg_color=COLORS["panel"], corner_radius=0)
+        spacer.pack(fill="both", expand=True)
 
         settings_btn = ctk.CTkButton(
-            header_right,
+            sidebar,
             text="Settings",
-            command=self.toggle_settings,
-            fg_color=self.colors["panel"],
-            hover_color=self.colors["outline_bright"],
-            text_color=self.colors["accent"],
+            command=self.show_settings,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"],
+            height=38
+        )
+        settings_btn.pack(padx=14, pady=(0, 16), fill="x")
+
+        # Content
+        content_frame = ctk.CTkFrame(main_frame, fg_color="transparent", corner_radius=0)
+        content_frame.grid(row=0, column=1, sticky="nsew", padx=(6, 12), pady=12)
+        content_frame.grid_columnconfigure(0, weight=1)
+        content_frame.grid_rowconfigure(2, weight=1)
+
+        # Compact cyberdeck header (3-row layout)
+        header_frame = ctk.CTkFrame(
+            content_frame,
+            fg_color=COLORS["panel_alt"],
+            corner_radius=0,
+            border_width=0
+        )
+        header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        header_frame.grid_columnconfigure(0, weight=1)
+        header_frame.grid_columnconfigure(1, weight=0)
+
+        # Row 1: Title + Clock
+        title_frame = ctk.CTkFrame(header_frame, fg_color=COLORS["panel_alt"], corner_radius=0)
+        title_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=0, pady=0)
+        title_frame.grid_columnconfigure(0, weight=1)
+        title_frame.grid_columnconfigure(1, weight=0)
+
+        header_title = ctk.CTkLabel(
+            title_frame,
+            text="CYBERDECK A9-X // SOL CORE",
+            font=FONTS["title"],
+            text_color=COLORS["accent"]
+        )
+        header_title.grid(row=0, column=0, sticky="w", padx=18, pady=(8, 0))
+
+        clock_frame = ctk.CTkFrame(title_frame, fg_color=COLORS["panel_alt"], corner_radius=0)
+        clock_frame.grid(row=0, column=1, sticky="e", padx=18, pady=(8, 0))
+
+        self.clock_label = ctk.CTkLabel(
+            clock_frame,
+            text="00:00:00",
+            font=FONTS["body_bold"],
+            text_color=COLORS["accent"]
+        )
+        self.clock_label.pack(anchor="e")
+
+        self.date_label = ctk.CTkLabel(
+            clock_frame,
+            text="MON 00 JAN",
+            font=FONTS["caption"],
+            text_color=COLORS["muted"]
+        )
+        self.date_label.pack(anchor="e")
+
+        # Row 2: Sync bar
+        sync_row = ctk.CTkFrame(header_frame, fg_color=COLORS["panel_alt"], corner_radius=0)
+        sync_row.grid(row=1, column=0, columnspan=2, sticky="ew", padx=18, pady=(4, 0))
+        sync_row.grid_columnconfigure(1, weight=1)
+
+        self.sync_label = ctk.CTkLabel(
+            sync_row,
+            text="SYNCING",
+            font=FONTS["caption"],
+            text_color=COLORS["muted"]
+        )
+        self.sync_label.pack(side="left", padx=(0, 8))
+
+        self.sync_bar = ctk.CTkProgressBar(
+            sync_row,
+            progress_color=COLORS["accent"],
+            fg_color=COLORS["panel"],
+            height=4,
+            corner_radius=2
+        )
+        self.sync_bar.pack(side="left", fill="x", expand=True)
+        self.sync_bar.set(0.35)
+
+        # Row 3: 6-column HUD dock
+        hud_frame = ctk.CTkFrame(header_frame, fg_color=COLORS["panel_alt"], corner_radius=0)
+        hud_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=18, pady=(6, 10))
+        for idx in range(6):
+            hud_frame.grid_columnconfigure(idx, weight=1)
+
+        def hud_chip(parent, title, value, color, column):
+            chip = ctk.CTkFrame(
+                parent,
+                fg_color=COLORS["panel"],
+                corner_radius=8,
+                border_width=1,
+                border_color=COLORS["outline"]
+            )
+            chip.grid(row=0, column=column, padx=3, pady=4, sticky="ew")
+            label = ctk.CTkLabel(
+                chip,
+                text=f"{title}: {value}",
+                font=FONTS["caption"],
+                text_color=color
+            )
+            label.pack(padx=6, pady=4, anchor="center")
+            return label
+
+        self.hud_labels = {}
+        self.hud_labels["model"] = hud_chip(
+            hud_frame,
+            "MODEL",
+            self.brain.config.get("lm_studio", {}).get("model", "local"),
+            COLORS["accent"],
+            0
+        )
+        self.hud_labels["mood"] = hud_chip(hud_frame, "MOOD", "CALM", COLORS["accent_alt"], 1)
+        self.hud_labels["memory"] = hud_chip(hud_frame, "MEM", "0", COLORS["info"], 2)
+        self.hud_labels["task"] = hud_chip(
+            hud_frame,
+            "TASK",
+            "ON" if self.task_enabled else "OFF",
+            COLORS["success"] if self.task_enabled else COLORS["danger"],
+            3
+        )
+        self.hud_labels["lm"] = hud_chip(hud_frame, "LM", self.connection_status, COLORS["warning"], 4)
+        self.hud_labels["temp"] = hud_chip(hud_frame, "TEMP", "0.7", COLORS["accent"], 5)
+
+        accent_bar = ctk.CTkFrame(header_frame, fg_color=COLORS["accent"], corner_radius=0, height=2)
+        accent_bar.grid(row=3, column=0, columnspan=2, sticky="ew", padx=0, pady=(0, 0))
+        self.accent_bar = accent_bar
+
+        # Action approval frame (hidden by default)
+        self.approval_frame = ctk.CTkFrame(
+            content_frame,
+            fg_color=COLORS["panel"],
+            corner_radius=16,
             border_width=1,
-            border_color=self.colors["accent"],
-            font=self.fonts["caption"],
-            height=30,
-            width=80
+            border_color=COLORS["outline_bright"]
         )
-        settings_btn.pack(side="left", padx=(0, 10))
+        self.approval_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        self.approval_frame.grid_remove()
 
-        history_btn = ctk.CTkButton(
-            header_right,
-            text="History",
-            command=self.toggle_sidebar,
-            fg_color=self.colors["panel"],
-            hover_color=self.colors["outline_bright"],
-            text_color=self.colors["info"],
-            border_width=1,
-            border_color=self.colors["info"],
-            font=self.fonts["caption"],
-            height=30,
-            width=80
+        approval_title = ctk.CTkLabel(
+            self.approval_frame,
+            text="ACTION GATE",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
         )
-        history_btn.pack(side="left")
+        approval_title.pack(pady=(10, 0))
 
-        accent_line = ctk.CTkFrame(
-            header,
-            fg_color=self.colors["accent"],
-            height=3
+        self.approval_label = ctk.CTkLabel(
+            self.approval_frame,
+            text="",
+            font=FONTS["body_bold"],
+            text_color=COLORS["text"]
         )
-        accent_line.grid(row=1, column=0, columnspan=2, sticky="ew")
+        self.approval_label.pack(pady=(6, 6))
 
-    def build_content_area(self):
-        self.content_container = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        self.content_container.grid(row=1, column=0, sticky="nsew", padx=15, pady=15)
-        self.content_container.grid_columnconfigure(1, weight=1)
-        self.content_container.grid_rowconfigure(0, weight=1)
+        approval_buttons = ctk.CTkFrame(self.approval_frame, fg_color=COLORS["panel_alt"], corner_radius=12)
+        approval_buttons.pack(pady=(0, 10))
 
-        self.build_sidebar()
-        self.build_main_panel()
-        self.build_settings_panel()
-
-    def build_sidebar(self):
-        self.sidebar_frame = ctk.CTkFrame(
-            self.content_container,
-            fg_color=self.colors["panel"],
-            corner_radius=8,
-            border_width=1,
-            border_color=self.colors["outline"],
-            width=250
+        self.approve_btn = ctk.CTkButton(
+            approval_buttons,
+            text="Approve",
+            command=self.approve_action,
+            fg_color=COLORS["accent"],
+            hover_color=COLORS["accent_hover"],
+            text_color=COLORS["bg"],
+            width=140
         )
-        self.sidebar_frame.grid(row=0, column=0, sticky="ns", padx=(0, 10))
-        self.sidebar_frame.grid_propagate(False)
+        self.approve_btn.pack(side="left", padx=6)
 
-        sidebar_title = ctk.CTkLabel(
-            self.sidebar_frame,
-            text="Chat History",
-            font=self.fonts["section"],
-            text_color=self.colors["accent"]
+        self.deny_btn = ctk.CTkButton(
+            approval_buttons,
+            text="Deny",
+            command=self.deny_action,
+            fg_color=COLORS["danger"],
+            hover_color="#e14f63",
+            text_color=COLORS["bg"],
+            width=140
         )
-        sidebar_title.pack(pady=(15, 10), padx=10)
+        self.deny_btn.pack(side="left", padx=6)
 
-        self.history_scroll = ctk.CTkScrollableFrame(
-            self.sidebar_frame,
-            fg_color="transparent"
-        )
-        self.history_scroll.pack(fill="both", expand=True, padx=10, pady=5)
-
-        self.load_chat_history()
-
-    def build_main_panel(self):
-        main_panel = ctk.CTkFrame(self.content_container, fg_color="transparent")
-        main_panel.grid(row=0, column=1, sticky="nsew")
-        main_panel.grid_columnconfigure(0, weight=1)
-        main_panel.grid_rowconfigure(1, weight=1)
-
-        chat_title = ctk.CTkLabel(
-            main_panel,
-            text="Chat",
-            font=self.fonts["section"],
-            text_color=self.colors["accent"],
-            anchor="w"
-        )
-        chat_title.grid(row=0, column=0, sticky="w", pady=(0, 8))
-
+        # Chat display area
         chat_frame = ctk.CTkFrame(
-            main_panel,
-            fg_color=self.colors["panel"],
-            corner_radius=8,
+            content_frame,
+            fg_color=COLORS["panel_alt"],
+            corner_radius=18,
             border_width=1,
-            border_color=self.colors["outline"]
+            border_color=COLORS["outline_bright"]
         )
-        chat_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 15))
+        chat_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+        chat_frame.grid_rowconfigure(0, weight=1)
+        chat_frame.grid_columnconfigure(0, weight=1)
 
-        self.chat_display = tk.Text(
+        self.chat_display = ctk.CTkTextbox(
             chat_frame,
-            bg=self.colors["panel"],
-            fg=self.colors["text_alt"],
-            font=("Consolas", 13),
+            font=FONTS["body"],
             wrap="word",
-            relief="flat",
-            borderwidth=0,
-            padx=15,
-            pady=15,
-            insertbackground=self.colors["accent"]
+            state="disabled",
+            fg_color=COLORS["panel_alt"],
+            text_color=COLORS["text"],
+            border_width=1,
+            border_color=COLORS["outline"],
+            scrollbar_button_color=COLORS["outline"],
+            scrollbar_button_hover_color=COLORS["accent_hover"]
         )
-        self.chat_display.pack(fill="both", expand=True)
-        self.chat_display.configure(state="disabled")
+        self.chat_display.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
+        self.configure_chat_tags()
 
-        self.chat_display.tag_config("user_name", foreground=self.colors["accent_alt"], font=("Consolas", 12, "bold"))
-        self.chat_display.tag_config("user_msg", foreground=self.colors["text_alt"])
-        self.chat_display.tag_config("assistant_name", foreground=self.colors["accent"], font=("Consolas", 12, "bold"))
-        self.chat_display.tag_config("assistant_msg", foreground=self.colors["text_alt"])
-        self.chat_display.tag_config("system_name", foreground=self.colors["warning"], font=("Consolas", 12, "bold"))
-        self.chat_display.tag_config("system_msg", foreground=self.colors["info"])
-        self.chat_display.tag_config("code_block", foreground=self.colors["info"], font=("Consolas", 12))
-
-        input_frame = ctk.CTkFrame(main_panel, fg_color="transparent")
-        input_frame.grid(row=2, column=0, sticky="ew")
+        # Input area
+        input_frame = ctk.CTkFrame(
+            content_frame,
+            fg_color=COLORS["panel_alt"],
+            corner_radius=18,
+            border_width=1,
+            border_color=COLORS["outline_bright"]
+        )
+        input_frame.grid(row=3, column=0, sticky="ew")
         input_frame.grid_columnconfigure(0, weight=1)
 
-        input_container = ctk.CTkFrame(
-            input_frame,
-            fg_color=self.colors["panel_alt"],
-            corner_radius=8,
-            border_width=1,
-            border_color=self.colors["outline_bright"]
-        )
-        input_container.grid(row=0, column=0, sticky="ew")
-        input_container.grid_columnconfigure(0, weight=1)
-
         self.input_box = ctk.CTkEntry(
-            master=input_frame,
-            font=self.fonts["body"],
-            fg_color=self.colors["panel_alt"],
-            text_color=self.colors["text"],
-            border_color=self.colors["outline"],
-            border_width=1,
+            input_frame,
             placeholder_text="Type your message to Sol...",
-            height=40
+            font=FONTS["body"],
+            height=42,
+            fg_color=COLORS["panel_alt"],
+            text_color=COLORS["text"],
+            placeholder_text_color=COLORS["muted"],
+            border_color=COLORS["accent"],
+            border_width=1
         )
-        self.input_box.grid(row=0, column=0, sticky="ew", padx=12, pady=12)
+        self.input_box.grid(row=0, column=0, sticky="ew", padx=(12, 10), pady=12)
         self.input_box.bind("<Return>", lambda e: self.send_message())
-        
-        # Bind Ctrl+V to handle image paste attempts
-        self.input_box.bind("<Control-v>", self._handle_paste)
 
-        button_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
-        button_frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
-
-        send_btn = ctk.CTkButton(
-            button_frame,
+        self.send_btn = ctk.CTkButton(
+            input_frame,
             text="Send",
             command=self.send_message,
-            fg_color=self.colors["accent"],
-            hover_color=self.colors["accent_hover"],
-            text_color=self.colors["bg"],
-            font=self.fonts["body_bold"],
+            width=110,
             height=40,
-            width=100
+            font=FONTS["body_bold"],
+            fg_color=COLORS["accent"],
+            hover_color=COLORS["accent_hover"],
+            text_color=COLORS["bg"]
         )
-        send_btn.pack(side="left", padx=(0, 8))
+        self.send_btn.grid(row=0, column=1, padx=(0, 12), pady=12)
 
-        clear_btn = ctk.CTkButton(
-            button_frame,
-            text="Clear",
-            command=self.clear_chat,
-            fg_color=self.colors["panel_alt"],
-            hover_color=self.colors["outline"],
-            text_color=self.colors["text"],
-            font=self.fonts["body_bold"],
-            height=40,
-            width=100
+        utility_frame = ctk.CTkFrame(input_frame, fg_color=COLORS["panel"], corner_radius=0)
+        utility_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=12, pady=(0, 10))
+        utility_frame.grid_columnconfigure(0, weight=1)
+
+        self.copy_btn = ctk.CTkButton(
+            utility_frame,
+            text="Copy Last",
+            command=self.copy_last_response,
+            height=28,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
         )
-        clear_btn.pack(side="left", padx=(0, 8))
+        self.copy_btn.grid(row=0, column=0, padx=(0, 8), sticky="w")
 
-        export_btn = ctk.CTkButton(
-            button_frame,
-            text="Export",
-            command=self.export_chat,
-            fg_color=self.colors["panel_alt"],
-            hover_color=self.colors["outline"],
-            text_color=self.colors["info"],
-            font=self.fonts["body_bold"],
-            height=40,
-            width=100
+        self.export_btn = ctk.CTkButton(
+            utility_frame,
+            text="Export Chat",
+            command=self.export_chat_history,
+            height=28,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
         )
-        export_btn.pack(side="left", padx=(0, 8))
+        self.export_btn.grid(row=0, column=1, padx=(0, 8), sticky="w")
+        
+        self.update_queue_status()
+        self.set_connection_status(self.connection_status)
+        self.refresh_gpu_info()
+        self.refresh_hud()
+        self.update_system_pulse()
+        self.animate_cyberdeck()
+        self.animate_flicker()
+        self.show_hud_dock()
 
-        new_session_btn = ctk.CTkButton(
-            button_frame,
-            text="New Session",
-            command=self.start_new_session,
-            fg_color=self.colors["panel_alt"],
-            hover_color=self.colors["outline"],
-            text_color=self.colors["warning"],
-            font=self.fonts["body_bold"],
-            height=40,
-            width=120
-        )
-        new_session_btn.pack(side="left")
-
-        self.add_message("SYSTEM", "SOL initialized. Ready.", "system")
-
-    def build_settings_panel(self):
-        self.settings_frame = ctk.CTkFrame(
-            self.content_container,
-            fg_color=self.colors["panel"],
-            corner_radius=8,
-            border_width=1,
-            border_color=self.colors["outline"],
-            width=350
-        )
-        self.settings_frame.grid(row=0, column=1, sticky="nsew", padx=(0, 10))
-        self.settings_frame.grid_propagate(False)
-        self.settings_frame.grid_remove()
-
-        settings_title = ctk.CTkLabel(
-            self.settings_frame,
-            text="Settings",
-            font=self.fonts["section"],
-            text_color=self.colors["accent"]
-        )
-        settings_title.pack(pady=(15, 10), padx=10)
-
-        settings_scroll = ctk.CTkScrollableFrame(
-            self.settings_frame,
-            fg_color="transparent"
-        )
-        settings_scroll.pack(fill="both", expand=True, padx=10, pady=5)
-
-        self.build_settings_lm_studio(settings_scroll)
-        self.build_settings_personality(settings_scroll)
-        self.build_settings_emotion(settings_scroll)
-        self.build_settings_memory(settings_scroll)
-
-        save_btn = ctk.CTkButton(
-            self.settings_frame,
-            text="Save Settings",
-            command=self.save_settings,
-            fg_color=self.colors["accent"],
-            hover_color=self.colors["accent_hover"],
-            text_color=self.colors["bg"],
-            font=self.fonts["body_bold"],
-            height=40
-        )
-        save_btn.pack(pady=(10, 15), padx=10, fill="x")
-
-    def build_settings_lm_studio(self, parent):
-        section = ctk.CTkLabel(
-            parent,
-            text="LM Studio",
-            font=self.fonts["section"],
-            text_color=self.colors["accent_alt"],
-            anchor="w"
-        )
-        section.pack(fill="x", pady=(10, 5), padx=5)
-
-        lm_config = self.brain.config.get("lm_studio", {})
-
-        ctk.CTkLabel(parent, text="API URL", font=self.fonts["caption"], text_color=self.colors["muted"], anchor="w").pack(fill="x", padx=5)
-        self.settings_api_url = ctk.CTkEntry(parent, fg_color=self.colors["panel"], text_color=self.colors["text"], font=self.fonts["body"])
-        self.settings_api_url.insert(0, lm_config.get("api_url", "http://localhost:1234/v1"))
-        self.settings_api_url.pack(fill="x", padx=5, pady=(0, 10))
-
-        ctk.CTkLabel(parent, text="Model", font=self.fonts["caption"], text_color=self.colors["muted"], anchor="w").pack(fill="x", padx=5)
-        self.settings_model = ctk.CTkEntry(parent, fg_color=self.colors["panel"], text_color=self.colors["text"], font=self.fonts["body"])
-        self.settings_model.insert(0, lm_config.get("model", "local-model"))
-        self.settings_model.pack(fill="x", padx=5, pady=(0, 10))
-
-        ctk.CTkLabel(parent, text="Temperature", font=self.fonts["caption"], text_color=self.colors["muted"], anchor="w").pack(fill="x", padx=5)
-        self.settings_temp = ctk.CTkSlider(parent, from_=0.0, to=1.0, number_of_steps=10, fg_color=self.colors["outline"], button_color=self.colors["accent"])
-        self.settings_temp.set(lm_config.get("temperature", 0.7))
-        self.settings_temp.pack(fill="x", padx=5, pady=(0, 5))
-        self.settings_temp_label = ctk.CTkLabel(parent, text=f"{lm_config.get('temperature', 0.7):.1f}", font=self.fonts["caption"], text_color=self.colors["text"])
-        self.settings_temp_label.pack(pady=(0, 10), padx=5)
-        self.settings_temp.configure(command=lambda v: self.settings_temp_label.configure(text=f"{float(v):.1f}"))
-
-        ctk.CTkLabel(parent, text="Max Tokens", font=self.fonts["caption"], text_color=self.colors["muted"], anchor="w").pack(fill="x", padx=5)
-        self.settings_max_tokens = ctk.CTkEntry(parent, fg_color=self.colors["panel"], text_color=self.colors["text"], font=self.fonts["body"])
-        self.settings_max_tokens.insert(0, str(lm_config.get("max_tokens", 500)))
-        self.settings_max_tokens.pack(fill="x", padx=5, pady=(0, 10))
-
-    def build_settings_personality(self, parent):
-        section = ctk.CTkLabel(
-            parent,
-            text="Personality",
-            font=self.fonts["section"],
-            text_color=self.colors["accent_alt"],
-            anchor="w"
-        )
-        section.pack(fill="x", pady=(10, 5), padx=5)
-
-        sol_config = self.brain.config.get("sol", {})
-
-        ctk.CTkLabel(parent, text="Name", font=self.fonts["caption"], text_color=self.colors["muted"], anchor="w").pack(fill="x", padx=5)
-        self.settings_name = ctk.CTkEntry(parent, fg_color=self.colors["panel"], text_color=self.colors["text"], font=self.fonts["body"])
-        self.settings_name.insert(0, sol_config.get("name", "Sol"))
-        self.settings_name.pack(fill="x", padx=5, pady=(0, 10))
-
-        ctk.CTkLabel(parent, text="Approval Required", font=self.fonts["caption"], text_color=self.colors["muted"], anchor="w").pack(fill="x", padx=5)
-        self.settings_approval = ctk.CTkCheckBox(
-            parent,
-            text="Require action approval",
-            font=self.fonts["body"],
-            text_color=self.colors["text"],
-            fg_color=self.colors["accent"],
-            checkbox_height=18,
-            checkbox_width=18
-        )
-        if sol_config.get("approval_required", True):
-            self.settings_approval.select()
-        self.settings_approval.pack(anchor="w", padx=5, pady=(0, 10))
-
-    def build_settings_emotion(self, parent):
-        section = ctk.CTkLabel(
-            parent,
-            text="Emotion System",
-            font=self.fonts["section"],
-            text_color=self.colors["accent_alt"],
-            anchor="w"
-        )
-        section.pack(fill="x", pady=(10, 5), padx=5)
-
-        emotion_config = self.brain.config.get("emotion", {})
-
-        self.settings_emotion_enabled = ctk.CTkCheckBox(
-            parent,
-            text="Enable emotion system",
-            font=self.fonts["body"],
-            text_color=self.colors["text"],
-            fg_color=self.colors["accent"],
-            checkbox_height=18,
-            checkbox_width=18
-        )
-        if emotion_config.get("enabled", True):
-            self.settings_emotion_enabled.select()
-        self.settings_emotion_enabled.pack(anchor="w", padx=5, pady=(0, 5))
-
-        self.settings_curiosity = ctk.CTkCheckBox(
-            parent,
-            text="Enable curiosity",
-            font=self.fonts["body"],
-            text_color=self.colors["text"],
-            fg_color=self.colors["accent"],
-            checkbox_height=18,
-            checkbox_width=18
-        )
-        if emotion_config.get("curiosity_enabled", True):
-            self.settings_curiosity.select()
-        self.settings_curiosity.pack(anchor="w", padx=5, pady=(0, 10))
-
-        ctk.CTkLabel(parent, text="Mood Decay", font=self.fonts["caption"], text_color=self.colors["muted"], anchor="w").pack(fill="x", padx=5)
-        self.settings_mood_decay = ctk.CTkSlider(parent, from_=0.0, to=1.0, number_of_steps=20, fg_color=self.colors["outline"], button_color=self.colors["accent"])
-        self.settings_mood_decay.set(emotion_config.get("mood_decay", 0.15))
-        self.settings_mood_decay.pack(fill="x", padx=5, pady=(0, 5))
-        self.settings_mood_decay_label = ctk.CTkLabel(parent, text=f"{emotion_config.get('mood_decay', 0.15):.2f}", font=self.fonts["caption"], text_color=self.colors["text"])
-        self.settings_mood_decay_label.pack(pady=(0, 10), padx=5)
-        self.settings_mood_decay.configure(command=lambda v: self.settings_mood_decay_label.configure(text=f"{float(v):.2f}"))
-
-    def build_settings_memory(self, parent):
-        section = ctk.CTkLabel(
-            parent,
-            text="Memory",
-            font=self.fonts["section"],
-            text_color=self.colors["accent_alt"],
-            anchor="w"
-        )
-        section.pack(fill="x", pady=(10, 5), padx=5)
-
-        memory_config = self.brain.config.get("memory", {})
-
-        self.settings_rag = ctk.CTkCheckBox(
-            parent,
-            text="Enable RAG retrieval",
-            font=self.fonts["body"],
-            text_color=self.colors["text"],
-            fg_color=self.colors["accent"],
-            checkbox_height=18,
-            checkbox_width=18
-        )
-        if memory_config.get("rag_enabled", True):
-            self.settings_rag.select()
-        self.settings_rag.pack(anchor="w", padx=5, pady=(0, 5))
-
-        self.settings_summary = ctk.CTkCheckBox(
-            parent,
-            text="Enable conversation summaries",
-            font=self.fonts["body"],
-            text_color=self.colors["text"],
-            fg_color=self.colors["accent"],
-            checkbox_height=18,
-            checkbox_width=18
-        )
-        if memory_config.get("summary_enabled", True):
-            self.settings_summary.select()
-        self.settings_summary.pack(anchor="w", padx=5, pady=(0, 5))
-
-        self.settings_long_term = ctk.CTkCheckBox(
-            parent,
-            text="Enable long-term memory",
-            font=self.fonts["body"],
-            text_color=self.colors["text"],
-            fg_color=self.colors["accent"],
-            checkbox_height=18,
-            checkbox_width=18
-        )
-        if memory_config.get("long_term_memory_enabled", True):
-            self.settings_long_term.select()
-        self.settings_long_term.pack(anchor="w", padx=5, pady=(0, 10))
-
-        ctk.CTkLabel(parent, text="Max Conversation History", font=self.fonts["caption"], text_color=self.colors["muted"], anchor="w").pack(fill="x", padx=5)
-        self.settings_conv_history = ctk.CTkEntry(parent, fg_color=self.colors["panel"], text_color=self.colors["text"], font=self.fonts["body"])
-        self.settings_conv_history.insert(0, str(memory_config.get("max_conversation_history", 50)))
-        self.settings_conv_history.pack(fill="x", padx=5, pady=(0, 10))
-
-    def load_chat_history(self):
-        for widget in self.history_scroll.winfo_children():
-            widget.destroy()
-
-        memory = self.brain.memory
-        history = memory.get_conversation_history_with_timestamps(limit=100)
-
-        if not history:
-            ctk.CTkLabel(
-                self.history_scroll,
-                text="No conversations yet",
-                font=self.fonts["caption"],
-                text_color=self.colors["muted"]
-            ).pack(pady=20)
-            return
-
-        grouped = {}
-        for entry in history:
-            ts = entry.get("timestamp", "")
-            if ts:
-                try:
-                    dt = datetime.fromisoformat(ts)
-                    date_key = dt.strftime("%Y-%m-%d")
-                except Exception:
-                    date_key = "Unknown"
-            else:
-                date_key = "Unknown"
-
-            if date_key not in grouped:
-                grouped[date_key] = []
-            grouped[date_key].append(entry)
-
-        for date_key in sorted(grouped.keys(), reverse=True):
-            date_label = ctk.CTkLabel(
-                self.history_scroll,
-                text=date_key,
-                font=self.fonts["caption"],
-                text_color=self.colors["accent"],
-                anchor="w"
-            )
-            date_label.pack(fill="x", pady=(10, 2), padx=5)
-
-            entries = grouped[date_key][-10:]
-            for entry in entries:
-                role = entry.get("role", "unknown")
-                content = entry.get("content", "")
-                preview = content[:60] + "..." if len(content) > 60 else content
-
-                role_indicators = {
-                    "user": self.colors["accent_alt"],
-                    "assistant": self.colors["accent"],
-                    "system": self.colors["warning"]
-                }
-                indicator = role_indicators.get(role, self.colors["muted"])
-
-                btn_frame = ctk.CTkFrame(self.history_scroll, fg_color="transparent")
-                btn_frame.pack(fill="x", pady=2, padx=5)
-
-                dot = ctk.CTkLabel(
-                    btn_frame,
-                    text="●",
-                    font=("Segoe UI", 8),
-                    text_color=indicator,
-                    width=15
-                )
-                dot.pack(side="left", padx=(0, 5))
-
-                btn = ctk.CTkButton(
-                    btn_frame,
-                    text=f"[{role.title()}] {preview}",
-                    font=self.fonts["body"],
-                    fg_color="transparent",
-                    hover_color=self.colors["outline"],
-                    text_color=self.colors["text_alt"],
-                    anchor="w",
-                    height=28,
-                    corner_radius=4
-                )
-                btn.pack(side="left", fill="x", expand=True)
-
-    def toggle_sidebar(self):
-        if self.sidebar_visible:
-            self.sidebar_frame.grid_remove()
-            self.sidebar_visible = False
-        else:
-            self.sidebar_frame.grid()
-            self.sidebar_visible = True
-            self.load_chat_history()
-
-    def toggle_settings(self):
-        if self.settings_visible:
-            self.settings_frame.grid_remove()
-            self.settings_visible = False
-        else:
-            self.settings_frame.grid()
-            self.settings_visible = True
-
-    def switch_theme(self, theme_name):
-        if self._switching_theme:
-            return
-        self._switching_theme = True
-
-        self.current_theme = theme_name
-        if theme_name == "clean":
-            self.colors = CLEAN_COLORS.copy()
-            self.fonts = CLEAN_FONTS.copy()
-            self.window.title("SOL AI Assistant")
-        else:
-            self.colors = CYBERDECK_COLORS.copy()
-            self.fonts = CYBERDECK_FONTS.copy()
-            self.window.title("SOL CYBERDECK")
-
-        self.main_frame.destroy()
-        self.setup_ui()
-
-        self._switching_theme = False
-
-    def save_settings(self):
-        try:
-            with open(self.config_path, 'r') as f:
-                config = json.load(f)
-        except Exception:
-            config = {}
-
-        config.setdefault("lm_studio", {})
-        config["lm_studio"]["api_url"] = self.settings_api_url.get().strip()
-        config["lm_studio"]["model"] = self.settings_model.get().strip()
-        config["lm_studio"]["temperature"] = self.settings_temp.get()
-        try:
-            config["lm_studio"]["max_tokens"] = int(self.settings_max_tokens.get().strip())
-        except ValueError:
-            pass
-
-        config.setdefault("sol", {})
-        config["sol"]["name"] = self.settings_name.get().strip()
-        config["sol"]["approval_required"] = self.settings_approval.get()
-
-        config.setdefault("emotion", {})
-        config["emotion"]["enabled"] = self.settings_emotion_enabled.get()
-        config["emotion"]["curiosity_enabled"] = self.settings_curiosity.get()
-        config["emotion"]["mood_decay"] = self.settings_mood_decay.get()
-
-        config.setdefault("memory", {})
-        config["memory"]["rag_enabled"] = self.settings_rag.get()
-        config["memory"]["summary_enabled"] = self.settings_summary.get()
-        config["memory"]["long_term_memory_enabled"] = self.settings_long_term.get()
-        try:
-            config["memory"]["max_conversation_history"] = int(self.settings_conv_history.get().strip())
-        except ValueError:
-            pass
-
-        with open(self.config_path, 'w') as f:
-            json.dump(config, f, indent=2)
-
-        self.brain.reload_config()
-
-        self.add_message("SYSTEM", "Settings saved successfully.", "system")
-
+        # Add welcome message
+        self.add_message("Sol", "Hello! I'm Sol, your AI assistant. I'm here to help you with tasks on your PC. What can I do for you today?", "assistant")
+    
     def add_message(self, sender, message, msg_type="user"):
+        """Add a message to the chat display"""
         if threading.current_thread() is not threading.main_thread():
             self.enqueue_ui(self.add_message, sender, message, msg_type)
             return
-        
-        try:
-            self.chat_display.configure(state="normal")
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            
-            if msg_type == "user":
-                self.chat_display.insert("end", f"[{timestamp}] YOU: ", "user_name")
-                self.chat_display.insert("end", f"{message}\n\n", "user_msg")
-            elif msg_type == "assistant":
-                self.chat_display.insert("end", f"[{timestamp}] SOL: ", "assistant_name")
-                self.chat_display.insert("end", f"{message}\n\n", "assistant_msg")
-            elif msg_type == "system":
-                self.chat_display.insert("end", f"[{timestamp}] {sender}: ", "system_name")
-                self.chat_display.insert("end", f"{message}\n\n", "system_msg")
-            
-            self.chat_display.configure(state="disabled")
-            self.chat_display.see("end")
-        except Exception as e:
-            print(f"add_message error: {e}")
 
-    def clear_chat(self):
         self.chat_display.configure(state="normal")
-        self.chat_display.delete("1.0", "end")
-        self.add_message("SYSTEM", "Chat cleared.", "system")
-
-    def start_new_session(self):
-        """Start a new session, preserving user memory and profile"""
-        if self.brain:
-            session_id = self.brain.start_new_session()
-            self.chat_display.configure(state="normal")
-            self.chat_display.delete("1.0", "end")
-            self.add_message("SYSTEM", f"New session started (ID: {session_id}). Chat history archived. User memory preserved.", "system")
-            self.add_message("SOL", "Hey, I'm here. What's on your mind?", "assistant")
-
-    def export_chat(self):
-        try:
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".txt",
-                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
-                initialfile=f"sol_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-            )
-            if file_path:
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(self.chat_display.get("1.0", "end"))
-                self.add_message("SYSTEM", f"Chat exported to: {file_path}", "system")
-        except Exception as e:
-            self.add_message("SYSTEM", f"Export failed: {str(e)}", "system")
-
-    def send_message(self):
-        message = self.input_box.get().strip()
-        if not message:
-            return
         
-        # Check if message contains image-related content
-        image_indicators = ["[image", "cannot read", "clipboard", "image input", "does not support", "model does not"]
-        if any(indicator in message.lower() for indicator in image_indicators):
-            self.input_box.delete(0, "end")
-            self.add_message("YOU", "[Image paste attempt]", "user")
-            self.add_message("SOL", "Boss, I.can't.see.images. Still. Describe it with words.", "assistant")
-            return
+        timestamp = datetime.now().strftime("%H:%M")
         
-        self.input_box.delete(0, "end")
-        self.add_message("YOU", message, "user")
-        self.set_status("THINKING...", self.colors["warning"])
+        if msg_type == "user":
+            prefix = f"\n[{timestamp}] You: "
+            self.chat_display.insert("end", prefix, "user_name")
+            self.chat_display.insert("end", f"{message}\n", "user_msg")
+        elif msg_type == "assistant":
+            prefix = f"\n[{timestamp}] Sol: "
+            self.chat_display.insert("end", prefix, "assistant_name")
+            self.insert_markdown(message, "assistant_msg")
+            self.chat_display.insert("end", "\n")
+            self.last_assistant_message = message
+        elif msg_type == "system":
+            self.chat_display.insert("end", f"\n[{timestamp}] SYSTEM: ", "system_name")
+            self.insert_markdown(message, "system_msg")
+            self.chat_display.insert("end", "\n")
+        elif msg_type == "action":
+            self.chat_display.insert("end", f"\n[{timestamp}] ⚡ ACTION: ", "action_name")
+            self.insert_markdown(message, "action_msg")
+            self.chat_display.insert("end", "\n")
+
+        if hasattr(self, "hud_dock_status"):
+            try:
+                self.hud_dock_status.configure(text=self.status_label.cget("text"), text_color=self.current_status_color)
+            except Exception:
+                pass
         
-        thread = threading.Thread(target=self.process_message, args=(message,))
-        thread.daemon = True
-        thread.start()
-    
-    def _handle_paste(self, event):
-        """Handle paste events to detect images"""
-        try:
-            clipboard = self.window.clipboard_get()
-            # Check if clipboard content looks like an image reference
-            if clipboard and any(x in clipboard.lower() for x in ["[image", "bitmap", "png", "jpg", "\\x00", "cannot read"]):
-                self.input_box.delete(0, "end")
-                self.add_message("YOU", "[Image paste attempt]", "user")
-                self.add_message("SOL", "Boss, really? I'm text-only. Describe what you're trying to show me.", "assistant")
-                return "break"
-        except tk.TclError:
-            # Clipboard contains non-text (image)
-            self.input_box.delete(0, "end")
-            self.add_message("YOU", "[Image paste attempt]", "user")
-            self.add_message("SOL", "*sigh* Still can't see images, boss. Use your words.", "assistant")
-            return "break"
-        return None
+        self.chat_display.configure(state="disabled")
+        self.chat_display.see("end")
 
-    def process_message(self, message):
-        try:
-            start_time = time.monotonic()
-            result = self.brain.chat(message)
-            self.last_response_seconds = time.monotonic() - start_time
-            tool_conf = result.get("tool_confidence")
-            self.last_tool_confidence = tool_conf if isinstance(tool_conf, (int, float)) else None
-            
-            self.set_connection_status("ONLINE")
-            
-            # Check if model returned an image-related error
-            response = result['response']
-            if any(x in response.lower() for x in ["cannot read", "image input", "does not support", "clipboard"]):
-                self.add_message("SOL", "Boss, I literally just said I can't see images. What part was unclear? Describe it with words.", "assistant")
-            else:
-                self.add_message("SOL", response, "assistant")
-            
-            if result.get('follow_up'):
-                self.add_message("SOL", f"[Follow-up: {result['follow_up']}]", "system")
-            
-            if result['action']:
-                self.pending_action = result['action']
-                if result['needs_approval']:
-                    self.enqueue_ui(self.handle_action_approval, result['action'])
+    def configure_chat_tags(self):
+        text_widget = getattr(self.chat_display, "_textbox", self.chat_display)
 
-            self.set_status("READY", self.colors["success"])
+        for name, color in [
+            ("user_name", COLORS["accent_alt"]),
+            ("assistant_name", COLORS["accent"]),
+            ("system_name", COLORS["warning"]),
+            ("action_name", COLORS["danger"]),
+            ("user_msg", COLORS["text"]),
+            ("assistant_msg", COLORS["text"]),
+            ("system_msg", COLORS["text"]),
+            ("action_msg", COLORS["text"])
+        ]:
+            try:
+                text_widget.tag_config(name, foreground=color)
+            except Exception:
+                pass
 
-        except Exception as e:
-            self.add_message("SYSTEM", f"ERROR: {str(e)}", "system")
-            self.set_status("ERROR", self.colors["danger"])
-            self.set_connection_status("OFFLINE")
-
-    def show_action_approval(self, action):
-        """Show approval dialog for an action (called from UI thread)"""
-        action_desc = action.get('description', str(action))
-
-        dialog = ctk.CTkToplevel(self.window)
-        dialog.title("Action Approval Required")
-        dialog.geometry("400x200")
-        dialog.resizable(False, False)
-        dialog.transient(self.window)
-        dialog.grab_set()
-
-        ctk.CTkLabel(
-            dialog,
-            text=f"Sol wants to perform this action:\n\n{action_desc}",
-            wraplength=350,
-            font=("Segoe UI", 12)
-        ).pack(pady=(20, 10), padx=20)
-
-        # Show queue info if there are more actions
-        if self.pending_actions:
-            queue_info = ctk.CTkLabel(
-                dialog,
-                text=f"+ {len(self.pending_actions)} more action(s) queued",
-                font=("Segoe UI", 10),
-                text_color=self.colors["muted"]
-            )
-            queue_info.pack(pady=(0, 10))
-
-        button_frame = ctk.CTkFrame(dialog, fg_color="transparent")
-        button_frame.pack(pady=10)
-
-        result = {"approved": False}
-
-        def on_approve():
-            result["approved"] = True
-            dialog.destroy()
-
-        def on_deny():
-            result["approved"] = False
-            dialog.destroy()
-
-        ctk.CTkButton(
-            button_frame, text="Allow", width=100,
-            fg_color=self.colors["success"], hover_color=self.colors["success"],
-            command=on_approve
-        ).pack(side="left", padx=10)
-
-        ctk.CTkButton(
-            button_frame, text="Deny", width=100,
-            fg_color=self.colors["danger"], hover_color=self.colors["danger"],
-            command=on_deny
-        ).pack(side="left", padx=10)
-
-        self.window.wait_window(dialog)
-
-        if result["approved"]:
-            self.add_message("SYSTEM", f"ACTION APPROVED: {action_desc}", "system")
-            thread = threading.Thread(target=self.execute_pending_action)
-            thread.daemon = True
-            thread.start()
-        else:
-            self.add_message("SYSTEM", f"ACTION DENIED: {action_desc}", "system")
-            self._clear_pending_actions()
-
-    def handle_action_approval(self, action):
-        """Prompt user to approve an action (alias for show_action_approval)"""
-        self.enqueue_ui(self.show_action_approval, action)
-
-    def execute_pending_action(self):
-        """Execute the currently pending action and proceed to next in queue"""
-        if not self.pending_action:
-            return
+        for name, font, color in [
+            ("bold", FONTS["body_bold"], COLORS["text"]),
+            ("italic", FONTS["body_italic"], COLORS["text"]),
+            ("inline_code", FONTS["code"], COLORS["info"]),
+            ("code_block", FONTS["code"], COLORS["text"])
+        ]:
+            try:
+                text_widget.tag_config(name, font=font, foreground=color)
+            except Exception:
+                pass
 
         try:
-            action_desc = self.pending_action.get('description', 'Unknown action')
-            self.add_message("SYSTEM", f"Executing: {action_desc}", "system")
+            text_widget.tag_config("code_block", background=COLORS["panel"])
+            text_widget.tag_config("list_item", lmargin1=16, lmargin2=32)
+        except Exception:
+            pass
 
-            result = self.brain.execute_action(self.pending_action)
+    def insert_markdown(self, text, default_tag):
+        """Render basic markdown for assistant/system/action messages."""
+        parts = text.split("```")
+        for idx, part in enumerate(parts):
+            if idx % 2 == 1:
+                self.chat_display.insert("end", part, ("code_block",))
+                continue
 
-            if result.get('success'):
-                self.add_message("SYSTEM", f"Action succeeded: {result.get('message', 'Done')}", "system")
-            else:
-                self.add_message("SYSTEM", f"Action failed: {result.get('error', 'Unknown error')}", "system")
-        except Exception as e:
-            self.add_message("SYSTEM", f"Execution error: {str(e)}", "system")
-        finally:
-            # Move to next action in queue
-            if self.pending_actions:
-                self.pending_action = self.pending_actions.pop(0)
-                # Show approval for next action
-                self.enqueue_ui(self.show_action_approval, self.pending_action)
-            else:
-                self.pending_action = None
+            for line in part.splitlines(keepends=True):
+                list_match = re.match(r"^\s*(?:[-*]|\d+\.)\s+(.*)", line)
+                if list_match:
+                    self.chat_display.insert("end", "• ", ("list_item", default_tag))
+                    self.insert_inline_markdown(list_match.group(1), default_tag)
+                    if line.endswith("\n"):
+                        self.chat_display.insert("end", "\n")
+                else:
+                    self.insert_inline_markdown(line, default_tag)
 
-    def _clear_pending_actions(self):
-        """Clear all pending actions"""
-        self.pending_action = None
-        self.pending_actions = []
+    def insert_inline_markdown(self, text, default_tag):
+        patterns = [
+            (re.compile(r"`([^`]+)`"), "inline_code"),
+            (re.compile(r"\*\*([^*]+)\*\*"), "bold"),
+            (re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)"), "italic")
+        ]
+
+        while text:
+            matches = []
+            for pattern, tag in patterns:
+                match = pattern.search(text)
+                if match:
+                    matches.append((match.start(), match, tag))
+
+            if not matches:
+                self.chat_display.insert("end", text, (default_tag,))
+                return
+
+            matches.sort(key=lambda item: item[0])
+            start, match, tag = matches[0]
+
+            if start > 0:
+                self.chat_display.insert("end", text[:start], (default_tag,))
+
+            self.chat_display.insert("end", match.group(1), (tag,))
+            text = text[match.end():]
 
     def set_status(self, text, color):
         if threading.current_thread() is not threading.main_thread():
             self.enqueue_ui(self.set_status, text, color)
             return
+        self.current_status_color = color
         self.status_label.configure(text=text, text_color=color)
+        self.refresh_flicker_targets()
+
+    def enqueue_ui(self, func, *args, **kwargs):
+        self.ui_queue.put((func, args, kwargs))
+
+    def process_ui_queue(self):
+        while True:
+            try:
+                func, args, kwargs = self.ui_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            try:
+                func(*args, **kwargs)
+            except Exception as e:
+                print(f"UI update error: {e}")
+
+        self.window.after(50, self.process_ui_queue)
+
+    def draw_cyberdeck_background(self):
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        if width <= 1 or height <= 1:
+            return
+
+        self.background.delete("all")
+
+        # Base gradient blocks
+        self.background.create_rectangle(0, 0, width, height, fill=COLORS["bg"], outline="")
+
+        # Grid pattern
+        grid_size = 40
+        for x in range(0, width, grid_size):
+            self.background.create_line(x, 0, x, height, fill=COLORS["grid"])
+        for y in range(0, height, grid_size):
+            self.background.create_line(0, y, width, y, fill=COLORS["grid"])
+
+        # Glass panel silhouettes
+        left_x1, left_y1 = 8, 70
+        left_x2, left_y2 = 252, height - 18
+        right_x1, right_y1 = 264, 70
+        right_x2, right_y2 = width - 18, height - 18
+        self.background.create_rectangle(
+            left_x1,
+            left_y1,
+            left_x2,
+            left_y2,
+            fill=COLORS["panel"],
+            outline=COLORS["outline_bright"]
+        )
+        self.background.create_rectangle(
+            right_x1,
+            right_y1,
+            right_x2,
+            right_y2,
+            fill=COLORS["panel_alt"],
+            outline=COLORS["outline"]
+        )
+        self.background.create_line(left_x1, left_y1, left_x1 + 120, left_y1, fill=COLORS["accent"])
+        self.background.create_line(right_x1, right_y1, right_x1 + 160, right_y1, fill=COLORS["accent_alt"])
+
+        # Neon header strip
+        self.background.create_rectangle(0, 0, width, 48, fill=COLORS["scanline_glow"], outline="")
+        self.background.create_rectangle(0, 48, width, 50, fill=COLORS["accent"], outline="")
+
+        # Scanline
+        self.background.create_rectangle(
+            0,
+            self.scanline_y,
+            width,
+            self.scanline_y + 12,
+            fill=COLORS["scanline"],
+            outline=""
+        )
+
+    def animate_cyberdeck(self):
+        height = max(1, self.window.winfo_height())
+        self.scanline_y = (self.scanline_y + self.scanline_speed) % (height + 20)
+        self.glow_phase += 0.08
+
+        glow = 0.5 + 0.5 * math.sin(self.glow_phase)
+        accent = COLORS["accent"]
+        alt = COLORS["accent_alt"]
+
+        # Update clock every frame
+        try:
+            now = datetime.now()
+            self.clock_label.configure(text=now.strftime("%H:%M:%S"))
+            self.date_label.configure(text=now.strftime("%a %d %b").upper())
+        except Exception:
+            pass
+
+        if self.current_status_color == COLORS["success"]:
+            glow_color = accent if glow > 0.5 else alt
+            try:
+                self.status_label.configure(text_color=glow_color)
+            except Exception:
+                pass
+
+        try:
+            if glow > 0.5:
+                self.accent_bar.configure(fg_color=COLORS["accent"])
+            else:
+                self.accent_bar.configure(fg_color=COLORS["accent_alt"])
+        except Exception:
+            pass
+
+        self.draw_cyberdeck_background()
+        self.window.after(50, self.animate_cyberdeck)
+
+    def create_hud_dock(self):
+        if self.hud_dock and self.hud_dock.winfo_exists():
+            return
+
+        dock = ctk.CTkToplevel(self.window)
+        dock.title("SOL HUD")
+        dock.geometry("280x240+18+80")
+        dock.configure(fg_color=COLORS["panel"])
+        dock.attributes("-topmost", True)
+        dock.protocol("WM_DELETE_WINDOW", self.hide_hud_dock)
+        self.hud_dock = dock
+
+        header = ctk.CTkFrame(dock, fg_color=COLORS["panel_alt"], corner_radius=12)
+        header.pack(fill="x", padx=10, pady=10)
+        ctk.CTkLabel(
+            header,
+            text="CYBER HUD",
+            font=FONTS["section"],
+            text_color=COLORS["accent"]
+        ).pack(padx=10, pady=(8, 0), anchor="w")
+        self.hud_dock_status = ctk.CTkLabel(
+            header,
+            text="READY",
+            font=FONTS["caption"],
+            text_color=COLORS["success"]
+        )
+        self.hud_dock_status.pack(padx=10, pady=(0, 8), anchor="w")
+
+        dock_body = ctk.CTkFrame(dock, fg_color=COLORS["panel_alt"], corner_radius=12)
+        dock_body.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        def dock_row(title, value):
+            row = ctk.CTkFrame(dock_body, fg_color=COLORS["panel"], corner_radius=8)
+            row.pack(fill="x", padx=10, pady=(8, 0))
+            label = ctk.CTkLabel(
+                row,
+                text=f"{title}: {value}",
+                font=FONTS["caption"],
+                text_color=COLORS["text"]
+            )
+            label.pack(padx=8, pady=6, anchor="w")
+            return label
+
+        self.hud_dock_labels = {
+            "model": dock_row("Model", "local"),
+            "task": dock_row("Task", "OFF"),
+            "queue": dock_row("Queue", "0"),
+            "latency": dock_row("Latency", "--"),
+            "gpu": dock_row("GPU", "N/A")
+        }
+
+        self.refresh_flicker_targets()
+
+    def show_hud_dock(self):
+        if not hasattr(self, "hud_dock"):
+            self.hud_dock = None
+        self.create_hud_dock()
+        try:
+            self.hud_dock.deiconify()
+        except Exception:
+            pass
+
+    def hide_hud_dock(self):
+        if self.hud_dock and self.hud_dock.winfo_exists():
+            self.hud_dock.withdraw()
+
+    def toggle_hud_dock(self):
+        if self.hud_dock and self.hud_dock.winfo_exists() and self.hud_dock.winfo_viewable():
+            self.hide_hud_dock()
+        else:
+            self.show_hud_dock()
+
+    def save_config(self):
+        try:
+            with open(self.config_path, "w", encoding="utf-8") as handle:
+                json.dump(self.brain.config, handle, ensure_ascii=True, indent=2)
+        except Exception as e:
+            self.add_message("System", f"Config save failed: {str(e)}", "system")
+
+    def refresh_flicker_targets(self):
+        targets = {}
+        if hasattr(self, "status_label"):
+            targets[self.status_label] = self.current_status_color
+        if hasattr(self, "connection_label"):
+            targets[self.connection_label] = self.current_connection_color
+
+        if hasattr(self, "hud_labels"):
+            for key, label in self.hud_labels.items():
+                base = COLORS["text"]
+                if key == "model":
+                    base = COLORS["accent"]
+                elif key == "mood":
+                    base = COLORS["accent_alt"]
+                elif key == "memory":
+                    base = COLORS["info"]
+                elif key == "task":
+                    base = COLORS["success"] if self.task_enabled else COLORS["danger"]
+                elif key == "lm":
+                    base = self.current_connection_color
+                elif key == "temp":
+                    base = COLORS["accent"]
+                elif key == "tokens":
+                    base = COLORS["info"]
+                elif key == "endpoint":
+                    base = COLORS["accent_alt"]
+                targets[label] = base
+
+        if hasattr(self, "telemetry_labels"):
+            for label in self.telemetry_labels.values():
+                targets[label] = COLORS["text"]
+
+        if hasattr(self, "hud_dock_labels"):
+            for label in self.hud_dock_labels.values():
+                targets[label] = COLORS["text"]
+        if hasattr(self, "hud_dock_status"):
+            targets[self.hud_dock_status] = self.current_status_color
+
+        self.flicker_targets = targets
+
+    def animate_flicker(self):
+        if not self.flicker_targets:
+            self.refresh_flicker_targets()
+
+        for label, color in self.flicker_targets.items():
+            try:
+                label.configure(text_color=color)
+            except Exception:
+                continue
+
+        if random.random() < 0.22:
+            count = min(len(self.flicker_targets), random.randint(1, 4))
+            for label in random.sample(list(self.flicker_targets.keys()), count):
+                try:
+                    label.configure(text_color=COLORS["muted"])
+                except Exception:
+                    pass
+
+        self.window.after(120, self.animate_flicker)
+
+    def update_hud_fields(self):
+        if threading.current_thread() is not threading.main_thread():
+            self.enqueue_ui(self.update_hud_fields)
+            return
+
+        mood = self.brain.get_mood_state() or {}
+        mood_label = str(mood.get("label", "calm")).upper()
+
+        memory_items = self.brain.memory.get_user_memory(limit=None)
+        memory_count = len(memory_items) if memory_items else 0
+
+        model_name = self.brain.config.get("lm_studio", {}).get("model", "local")
+        lm_config = self.brain.config.get("lm_studio", {})
+        temperature = lm_config.get("temperature", 0.7)
+        max_tokens = lm_config.get("max_tokens", 0)
+        endpoint = lm_config.get("api_url", "")
+        if isinstance(endpoint, str) and endpoint:
+            endpoint = endpoint.replace("http://", "").replace("https://", "")
+            endpoint = endpoint.split("/")[0]
+        else:
+            endpoint = "local"
+        task_state = "ON" if self.task_enabled else "OFF"
+        task_color = COLORS["success"] if self.task_enabled else COLORS["danger"]
+
+        lm_status = self.connection_status.upper()
+        if lm_status == "ONLINE":
+            lm_color = COLORS["success"]
+        elif lm_status == "OFFLINE":
+            lm_color = COLORS["danger"]
+        else:
+            lm_color = COLORS["warning"]
+
+        self.hud_labels["model"].configure(text=f"MODEL: {model_name}")
+        self.hud_labels["mood"].configure(text=f"MOOD: {mood_label}")
+        self.hud_labels["memory"].configure(text=f"MEM: {memory_count}")
+        self.hud_labels["task"].configure(text=f"TASK: {task_state}", text_color=task_color)
+        self.hud_labels["lm"].configure(text=f"LM: {lm_status}", text_color=lm_color)
+        self.hud_labels["temp"].configure(text=f"TEMP: {temperature}")
+
+        latency = "--"
+        if isinstance(self.last_response_seconds, (int, float)):
+            latency = f"{self.last_response_seconds:.2f}s"
+
+        confidence = "--"
+        if isinstance(self.last_tool_confidence, (int, float)):
+            confidence = f"{self.last_tool_confidence * 100:.0f}%"
+
+        context_count = self.brain.memory.get_conversation_count()
+        rag_enabled = self.brain.config.get("memory", {}).get("rag_enabled", True)
+        rag_label = "ON" if rag_enabled else "OFF"
+        vram_label = "--"
+        if isinstance(self.gpu_vram_gb, (int, float)):
+            vram_label = f"{self.gpu_vram_gb} GB"
+
+        if hasattr(self, "telemetry_labels"):
+            self.telemetry_labels["uplink"].configure(text=f"Uplink: {lm_status}")
+            self.telemetry_labels["latency"].configure(text=f"Latency: {latency}")
+            self.telemetry_labels["confidence"].configure(text=f"Tool Conf: {confidence}")
+            self.telemetry_labels["context"].configure(text=f"Context: {context_count} | RAG {rag_label}")
+            self.telemetry_labels["gpu"].configure(text=f"GPU: {self.gpu_name}")
+            self.telemetry_labels["vram"].configure(text=f"VRAM: {vram_label}")
+
+        if hasattr(self, "hud_dock_labels"):
+            queue_total = (1 if self.pending_action else 0) + len(self.pending_actions)
+            self.hud_dock_labels["model"].configure(text=f"Model: {model_name}")
+            self.hud_dock_labels["task"].configure(text=f"Task: {task_state}")
+            self.hud_dock_labels["queue"].configure(text=f"Queue: {queue_total}")
+            self.hud_dock_labels["latency"].configure(text=f"Latency: {latency}")
+            self.hud_dock_labels["gpu"].configure(text=f"GPU: {self.gpu_name}")
+
+        if hasattr(self, "hud_dock_status"):
+            self.hud_dock_status.configure(text=self.status_label.cget("text"), text_color=self.current_status_color)
+
+        self.refresh_flicker_targets()
+
+    def refresh_hud(self):
+        self.update_hud_fields()
+        self.window.after(2000, self.refresh_hud)
+
+    def update_queue_status(self):
+        if threading.current_thread() is not threading.main_thread():
+            self.enqueue_ui(self.update_queue_status)
+            return
+
+        queue_items = []
+        if self.pending_action:
+            queue_items.append(self.pending_action.get("description", "Pending action"))
+        queue_items.extend([
+            item.get("description", "Pending action")
+            for item in self.pending_actions[:2]
+        ])
+
+        total = (1 if self.pending_action else 0) + len(self.pending_actions)
+        if total == 0:
+            text = "No pending actions."
+            color = COLORS["muted"]
+        else:
+            lines = [f"{total} pending action(s):"]
+            for item in queue_items:
+                lines.append(f"- {item}")
+            text = "\n".join(lines)
+            color = COLORS["text"]
+
+        self.queue_status.configure(text=text, text_color=color)
+
+    def update_system_pulse(self):
+        metrics = self.get_system_metrics(interval=0)
+        cpu = metrics.get("cpu_percent", 0.0)
+        memory = metrics.get("memory_percent", 0.0)
+        disk = metrics.get("disk_percent", 0.0)
+
+        now = time.monotonic()
+        if now - self.last_gpu_refresh >= 30:
+            self.refresh_gpu_info()
+            self.last_gpu_refresh = now
+
+        self.cpu_label.configure(text=f"CPU: {cpu:.0f}%")
+        self.cpu_bar.set(min(max(cpu / 100.0, 0.0), 1.0))
+
+        self.mem_label.configure(text=f"Memory: {memory:.0f}%")
+        self.mem_bar.set(min(max(memory / 100.0, 0.0), 1.0))
+
+        self.disk_label.configure(text=f"Disk: {disk:.0f}%")
+        self.disk_bar.set(min(max(disk / 100.0, 0.0), 1.0))
+
+        self.window.after(2000, self.update_system_pulse)
+
+    def refresh_gpu_info(self):
+        self.gpu_name = "N/A"
+        self.gpu_vram_gb = None
+
+        if os.name != "nt":
+            return
+
+        try:
+            import win32com.client
+        except Exception:
+            return
+
+        try:
+            wmi = win32com.client.GetObject("winmgmts:")
+            adapters = wmi.InstancesOf("Win32_VideoController")
+        except Exception:
+            return
+
+        best = None
+        for adapter in adapters:
+            name = getattr(adapter, "Name", None)
+            ram = getattr(adapter, "AdapterRAM", None)
+            if name:
+                best = (name, ram)
+                if ram:
+                    break
+
+        if best:
+            self.gpu_name = best[0]
+            try:
+                if best[1]:
+                    self.gpu_vram_gb = round(int(best[1]) / (1024 ** 3), 1)
+            except Exception:
+                self.gpu_vram_gb = None
 
     def set_connection_status(self, status):
         if threading.current_thread() is not threading.main_thread():
             self.enqueue_ui(self.set_connection_status, status)
             return
-        self.connection_status = status
-        color = self.colors["success"] if status == "ONLINE" else self.colors["danger"]
-        symbol = "LM:"
-        self.connection_label.configure(text=f"{symbol} {status.upper()}", text_color=color)
 
-    def update_time(self):
-        now = datetime.now().strftime("%H:%M:%S")
-        self.time_label.configure(text=now)
-        self.window.after(1000, self.update_time)
-
-    def update_system_monitor(self):
-        try:
-            if hasattr(self, 'sol_monitor'):
-                metrics = self.sol_monitor.get_all_metrics()
-                cpu = metrics.get("cpu_percent", 0)
-                ram = metrics.get("memory_percent", 0)
-                disk = metrics.get("disk_percent", 0)
-                net_up = metrics.get("network_upload_mbps", 0)
-                net_down = metrics.get("network_download_mbps", 0)
-
-                monitor_text = f"CPU: {cpu:.0f}% | RAM: {ram:.0f}% | Disk: {disk:.0f}%"
-                if net_up or net_down:
-                    monitor_text += f" | ↑{net_up:.1f} ↓{net_down:.1f} MB/s"
-                self.sysmon_label.configure(text=monitor_text)
-            else:
-                cpu = psutil.cpu_percent(interval=0.5)
-                ram = psutil.virtual_memory().percent
-                disk = psutil.disk_usage('/').percent
-                self.sysmon_label.configure(text=f"CPU: {cpu:.0f}% | RAM: {ram:.0f}% | Disk: {disk:.0f}%")
-        except Exception:
-            pass
-        self.window.after(5000, self.update_system_monitor)
-
-    def _monitoring_loop(self):
-        """Background thread for Jarvis-style proactive system monitoring"""
-        while True:
-            try:
-                if not self.monitoring_config.get("enabled", True):
-                    time.sleep(30)
-                    continue
-
-                # Check quiet hours (allow critical alerts to pass)
-                quiet = self._is_quiet_hours()
-                if quiet and not self._has_critical_alerts():
-                    time.sleep(60)
-                    continue
-
-                # Get all metrics via SolMonitor
-                metrics = self.sol_monitor.get_all_metrics()
-
-                # Process each metric with smart alerting
-                for metric in ["cpu", "memory", "disk"]:
-                    self._process_metric_alert(metric, metrics, quiet)
-
-                # Check battery if available
-                if "battery_percent" in metrics:
-                    self._check_battery(metrics)
-
-                # Sleep for configured interval
-                interval = self.monitoring_config.get("interval_sec", 30)
-                time.sleep(interval)
-            except Exception:
-                time.sleep(30)
-
-    def _is_quiet_hours(self):
-        """Check if current time is within quiet hours"""
-        try:
-            quiet = self.monitoring_config.get("quiet_hours", {})
-            start_str = quiet.get("start", "23:00")
-            end_str = quiet.get("end", "07:00")
-
-            now = datetime.now().time()
-            start_time = datetime.strptime(start_str, "%H:%M").time()
-            end_time = datetime.strptime(end_str, "%H:%M").time()
-
-            if start_time <= end_time:
-                return start_time <= now <= end_time
-            else:  # Crosses midnight
-                return now >= start_time or now <= end_time
-        except Exception:
-            return False
-
-    def _has_critical_alerts(self):
-        """Check if any metrics are at critical level (to bypass quiet hours)"""
-        if not hasattr(self, 'sol_monitor'):
-            return False
-        metrics = self.sol_monitor.get_all_metrics()
-        return any([
-            metrics.get("cpu_critical", False),
-            metrics.get("memory_critical", False),
-            metrics.get("disk_critical", False)
-        ])
-
-    def _process_metric_alert(self, metric, metrics, quiet=False):
-        """Process alert for a specific metric with smart logic"""
-        level = self.sol_monitor.get_alert_level(metric, metrics)
-        if not level:
-            # Clear any existing alert state
-            if metric in self.alert_levels:
-                del self.alert_levels[metric]
-            return
-
-        # Check if we should escalate
-        escalate = self.sol_monitor.should_escalate(metric, metrics)
-        trend = metrics.get(f"{metric}_trend", "stable")
-
-        # Determine message based on level and escalation
-        if level == "critical" and escalate:
-            alert_type = "critical_escalated"
-        elif level == "critical":
-            alert_type = "critical"
+        self.connection_status = status.upper()
+        if self.connection_status == "ONLINE":
+            color = COLORS["success"]
+        elif self.connection_status == "OFFLINE":
+            color = COLORS["danger"]
         else:
-            alert_type = "warning"
+            color = COLORS["warning"]
 
-        # Check cooldown
-        now = time.time()
-        cooldown = self.proactive_config.get("cooldown_sec", 600)
-        last_alert_time = self.last_alert_time.get(metric, 0)
+        self.current_connection_color = color
+        self.connection_label.configure(text=f"LM: {self.connection_status}", text_color=color)
+        self.update_hud_fields()
+        self.refresh_flicker_targets()
 
-        # Reduced cooldown for critical/escalated
-        if alert_type == "critical_escalated":
-            cooldown = cooldown // 2
+    def toggle_task_mode(self):
+        self.task_enabled = bool(self.task_var.get())
+        self.brain.config.setdefault("agent", {})["enabled"] = self.task_enabled
+        self.save_config()
+        self.update_hud_fields()
+        state = "enabled" if self.task_enabled else "disabled"
+        self.add_message("System", f"Task mode {state}.", "system")
 
-        if now - last_alert_time < cooldown and self.alert_levels.get(metric) == alert_type:
+    def toggle_monitoring(self):
+        self.monitoring_enabled = bool(self.monitor_var.get())
+        self.brain.config.setdefault("monitoring", {})["enabled"] = self.monitoring_enabled
+        self.save_config()
+        self.add_message("System", f"Monitoring {'enabled' if self.monitoring_enabled else 'disabled'}.", "system")
+
+    def toggle_suggestions(self):
+        self.suggestions_enabled = bool(self.suggest_var.get())
+        self.brain.config.setdefault("proactive_suggestions", {})["enabled"] = self.suggestions_enabled
+        self.save_config()
+        self.add_message("System", f"Suggestions {'enabled' if self.suggestions_enabled else 'disabled'}.", "system")
+
+    def toggle_auto_queue(self):
+        self.auto_queue_enabled = bool(self.auto_queue_var.get())
+        self.brain.config.setdefault("proactive_suggestions", {})["auto_queue_actions"] = self.auto_queue_enabled
+        self.save_config()
+        self.add_message("System", f"Auto-queue {'enabled' if self.auto_queue_enabled else 'disabled'}.", "system")
+
+    def copy_last_response(self):
+        if not self.last_assistant_message:
+            self.add_message("System", "No assistant response to copy yet.", "system")
             return
 
-        # Generate and send alert
-        self._send_metric_alert(metric, metrics, alert_type, trend, quiet)
-        self.last_alert_time[metric] = now
-        self.alert_levels[metric] = alert_type
+        self.window.clipboard_clear()
+        self.window.clipboard_append(self.last_assistant_message)
+        self.add_message("System", "Copied last response to clipboard.", "system")
 
-        # Log to memory if available
-        self._log_alert_to_memory(metric, metrics, alert_type)
+    def export_chat_history(self):
+        default_name = f"sol_chat_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text Files", "*.txt")],
+            initialfile=default_name
+        )
+        if not file_path:
+            return
 
-    def _send_metric_alert(self, metric, metrics, alert_type, trend, quiet=False):
-        """Send alert message to chat"""
-        value = metrics.get(f"{metric}_percent", 0)
-
-        # Try LLM-generated message if brain is available
-        message = self._generate_alert_message(metric, value, alert_type, trend, metrics)
-
-        # Choose message style based on quiet hours
-        prefix = "SOL" if not quiet else "SOL [URGENT]"
-
-        self.enqueue_ui(self.add_message, prefix, message, "system")
-
-        # If auto-queue actions enabled, suggest remediation
-        if self.proactive_config.get("auto_queue_actions", True):
-            self._suggest_remediation(metric, metrics)
-
-    def _generate_alert_message(self, metric, value, alert_type, trend, metrics):
-        """Generate alert message using LLM if available, otherwise use templates"""
+        messages = self.brain.memory.get_conversation_history_with_timestamps(limit=None)
         try:
-            # Get mood for personality-aware messaging
-            mood = self.brain.personality.get_mood_state()
-            mood_label = mood.get("label", "calm")
-
-            # Build context for LLM
-            context = f"""System Alert:
-- Metric: {metric.upper()}
-- Value: {value:.0f}%
-- Level: {alert_type}
-- Trend: {trend}
-- Your mood: {mood_label}
-
-Generate a short, personality-consistent alert message (max 20 words). Be helpful and witty."""
-
-            # Try to use LLM
-            if hasattr(self.brain, 'llm_client'):
-                messages = [
-                    {"role": "system", "content": self.brain.config["sol"]["personality"]},
-                    {"role": "user", "content": context}
-                ]
-                response = self.brain.llm_client.chat(messages, max_tokens=60)
-                if response and len(response.strip()) > 5:
-                    return response.strip()
-        except Exception:
-            pass
-
-        # Fallback to template messages
-        return self._get_template_alert(metric, value, alert_type, trend)
-
-    def _get_template_alert(self, metric, value, alert_type, trend):
-        """Fallback template alerts"""
-        trend_emoji = "📈" if trend == "rising" else "➡️" if trend == "stable" else "📉"
-
-        if alert_type == "critical_escalated":
-            templates = {
-                "cpu": f"{trend_emoji} CRITICAL: CPU has been at {value:.0f}% for too long. I recommend closing apps NOW.",
-                "memory": f"{trend_emoji} CRITICAL: Memory critical at {value:.0f}%. System instability likely.",
-                "disk": f"{trend_emoji} CRITICAL: Disk space critical at {value:.0f}%. Clean up immediately."
-            }
-        elif alert_type == "critical":
-            templates = {
-                "cpu": f"{trend_emoji} CPU is at {value:.0f}% - running hot, boss!",
-                "memory": f"{trend_emoji} Memory at {value:.0f}% - things are getting heavy.",
-                "disk": f"{trend_emoji} Disk space at {value:.0f}% - cleanup time!"
-            }
-        else:  # warning
-            templates = {
-                "cpu": f"{trend_emoji} CPU at {value:.0f}% - starting to heat up.",
-                "memory": f"{trend_emoji} Memory at {value:.0f}% - keep an eye on it.",
-                "disk": f"{trend_emoji} Disk at {value:.0f}% - might want to clean up soon."
-            }
-
-        return templates.get(metric, f"{metric.upper()} is at {value:.0f}%")
-
-    def _suggest_remediation(self, metric, metrics):
-        """Queue actionable remediation steps based on the alert"""
-        actions = []
-
-        if metric == "cpu" or metric == "memory":
-            top_processes = metrics.get(f"top_{metric}_processes", [])
-            if top_processes:
-                proc_list = ", ".join([p.get('name', 'unknown') for p in top_processes[:3]])
-                message = f"Top processes: {proc_list}. Want me to close any of these?"
-                self.enqueue_ui(self.add_message, "SOL", message, "system")
-
-                # Queue action to list running apps
-                actions.append({
-                    "type": "list_running_apps",
-                    "params": {},
-                    "description": "List running apps to find heavy consumers"
-                })
-
-        elif metric == "disk":
-            downloads_path = str(self.brain.actions.user_home / "Downloads")
-            message = f"I can list your Downloads folder to help clean up."
-            self.enqueue_ui(self.add_message, "SOL", message, "system")
-
-            actions.append({
-                "type": "list_directory",
-                "params": {"directory": downloads_path},
-                "description": f"List Downloads folder for cleanup"
-            })
-
-        # Queue the actions for approval
-        if actions and not self.pending_action and not self.pending_actions:
-            self.pending_actions = actions
-            self.pending_action = self.pending_actions.pop(0)
-            self.enqueue_ui(self.show_action_approval, self.pending_action)
-
-    def _check_battery(self, metrics):
-        """Check battery status and alert if low"""
-        if not metrics.get("battery_plugged", True) and metrics.get("battery_low", False):
-            percent = metrics.get("battery_percent", 0)
-            message = f"Battery low: {percent:.0f}%. You might want to plug in soon."
-            self.enqueue_ui(self.add_message, "SOL", message, "system")
-
-    def _log_alert_to_memory(self, metric, metrics, alert_type):
-        """Log alert to SOL's memory system with context"""
-        try:
-            if hasattr(self.brain, 'memory'):
-                value = metrics.get(f"{metric}_percent", 0)
-                trend = metrics.get(f"{metric}_trend", "stable")
-
-                # Create rich context for memory
-                details = {
-                    "metric": metric,
-                    "value": round(value, 1),
-                    "alert_type": alert_type,
-                    "trend": trend,
-                    "top_processes": [p.get('name') for p in metrics.get(f"top_{metric}_processes", [])[:3]]
-                }
-
-                self.brain.memory.log_action(
-                    action_type="system_alert",
-                    action_details=json.dumps(details),
-                    approved=False,  # Alerts don't require approval
-                    result="alerted"
-                )
-
-                # Also add to user memory for pattern recognition
-                self.brain.memory.add_memory_item(
-                    memory_type="system_pattern",
-                    value=f"Alert: {metric} at {value:.0f}% ({alert_type}, trend: {trend})",
-                    source="system_monitor"
-                )
-        except Exception:
-            pass
-
-    def animate_glow(self):
-        self.glow_phase += 0.15
-        self.window.after(100, self.animate_glow)
-
-    def process_ui_queue(self):
-        try:
-            # Process all pending items without blocking
-            while True:
-                try:
-                    func, args, kwargs = self.ui_queue.get_nowait()
-                    try:
-                        func(*args, **kwargs)
-                    except Exception as e:
-                        print(f"UI Queue Error in {func.__name__}: {e}")
-                except queue.Empty:
-                    break
+            with open(file_path, "w", encoding="utf-8") as handle:
+                for item in messages:
+                    timestamp = item.get("timestamp", "")
+                    role = item.get("role", "").capitalize()
+                    content = item.get("content", "")
+                    handle.write(f"[{timestamp}] {role}: {content}\n")
         except Exception as e:
-            print(f"UI Queue Fatal Error: {e}")
-        finally:
-            # Always reschedule, even on error
-            self.window.after(100, self.process_ui_queue)
+            self.add_message("System", f"Export failed: {str(e)}", "system")
+            return
 
-    def enqueue_ui(self, func, *args, **kwargs):
-        self.ui_queue.put((func, args, kwargs))
+        self.add_message("System", f"Chat exported to: {file_path}", "system")
 
-    def start_monitoring(self):
-        self.update_time()
-        self.update_system_monitor()
-        self.check_connection_status()
-        self.monitoring_config = self.brain.config.get("monitoring", {})
-        self.proactive_config = self.brain.config.get("proactive_suggestions", {})
-        self.last_alert_time = {}
-        self.alert_levels = {}  # metric -> "warning"/"critical"
-        self.sol_monitor = SolMonitor(self.brain.config)
-        self.monitoring_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
-        if self.monitoring_config.get("enabled", True):
-            self.monitoring_thread.start()
+    def show_memory_vault(self):
+        vault = ctk.CTkToplevel(self.window)
+        vault.title("Memory Vault")
+        vault.geometry("720x520")
+        vault.configure(fg_color=COLORS["bg"])
 
-    def check_connection_status(self):
-        thread = threading.Thread(target=self._check_connection)
+        tabs = ctk.CTkTabview(vault, fg_color=COLORS["panel"])
+        tabs.pack(fill="both", expand=True, padx=12, pady=12)
+
+        profile_tab = tabs.add("Profile")
+        memory_tab = tabs.add("Memory")
+        summary_tab = tabs.add("Summaries")
+
+        def make_box(parent):
+            box = ctk.CTkTextbox(
+                parent,
+                fg_color=COLORS["panel_alt"],
+                text_color=COLORS["text"],
+                font=FONTS["body"],
+                wrap="word"
+            )
+            box.pack(fill="both", expand=True, padx=12, pady=12)
+            return box
+
+        profile_box = make_box(profile_tab)
+        memory_box = make_box(memory_tab)
+        summary_box = make_box(summary_tab)
+
+        profile = self.brain.memory.get_user_profile()
+        profile_lines = ["User Profile:"]
+        for key, values in profile.items():
+            label = key.replace("_", " ").title()
+            profile_lines.append(f"\n{label}:")
+            if values:
+                for value in values:
+                    profile_lines.append(f"- {value}")
+            else:
+                profile_lines.append("- None")
+
+        profile_box.insert("end", "\n".join(profile_lines))
+        profile_box.configure(state="disabled")
+
+        memory_items = self.brain.memory.get_user_memory(limit=200, include_meta=True)
+        memory_lines = ["Long-term Memory:"]
+        if memory_items:
+            for item in memory_items:
+                memory_lines.append(
+                    f"- [{item.get('type')}] {item.get('value')} (used {item.get('use_count', 0)}x)"
+                )
+        else:
+            memory_lines.append("- No long-term memory items yet.")
+        memory_box.insert("end", "\n".join(memory_lines))
+        memory_box.configure(state="disabled")
+
+        summaries = self.brain.memory.get_preference("conversation_summaries", default=[])
+        summary_lines = ["Conversation Summaries:"]
+        if summaries:
+            for item in summaries[-5:]:
+                summary_lines.append(f"\n[{item.get('timestamp', '')}]\n{item.get('summary', '')}")
+        else:
+            summary_lines.append("- No summaries yet.")
+        summary_box.insert("end", "\n".join(summary_lines))
+        summary_box.configure(state="disabled")
+    
+    def send_message(self):
+        """Send user message to Sol"""
+        message = self.input_box.get().strip()
+        if not message:
+            return
+        
+        # Clear input
+        self.input_box.delete(0, "end")
+        
+        # Display user message
+        self.add_message("You", message, "user")
+        
+        # Update status
+        self.set_status("THINKING...", COLORS["warning"])
+        
+        # Process in background thread to keep UI responsive
+        thread = threading.Thread(target=self.process_message, args=(message,))
         thread.daemon = True
         thread.start()
-
-    def _check_connection(self):
+    
+    def process_message(self, message):
+        """Process message with Sol brain"""
         try:
-            import requests
-            response = requests.get("http://localhost:1234/v1/models", timeout=2)
-            if response.status_code == 200:
-                self.set_connection_status("ONLINE")
-            else:
-                self.set_connection_status("OFFLINE")
-        except Exception:
+            normalized = message.strip().lower()
+            if normalized in ["/stop", "/cancel", "stop task"]:
+                self.clear_pending_task()
+                self.add_message("System", "Task cancelled.", "system")
+                self.set_status("READY", COLORS["success"])
+                return
+
+            if self.is_task_command(message):
+                if not self.brain.config.get("agent", {}).get("enabled", True):
+                    self.add_message("System", "Task mode is disabled in config.json.", "system")
+                else:
+                    self.process_task_message(message)
+                self.set_status("READY", COLORS["success"])
+                return
+
+            start_time = time.monotonic()
+            result = self.brain.chat(message)
+            self.last_response_seconds = time.monotonic() - start_time
+            tool_conf = result.get("tool_confidence")
+            self.last_tool_confidence = tool_conf if isinstance(tool_conf, (int, float)) else None
+            self.set_connection_status("ONLINE")
+            
+            # Display Sol's response
+            self.add_message("Sol", result['response'], "assistant")
+
+            follow_up = result.get("follow_up")
+            if isinstance(follow_up, str) and follow_up.strip():
+                self.add_message("Sol", follow_up.strip(), "assistant")
+            
+            # Check if action needed
+            if result['action']:
+                self.pending_action = result['action']
+                if result['needs_approval']:
+                    self.show_approval_request(result['action'])
+                else:
+                    # Auto-execute if approval not required
+                    self.execute_pending_action()
+            
+            # Update status
+            self.set_status("READY", COLORS["success"])
+            self.update_hud_fields()
+        
+        except Exception as e:
+            self.add_message("System", f"Error: {str(e)}", "system")
+            self.set_status("ERROR", COLORS["danger"])
             self.set_connection_status("OFFLINE")
 
-        self.window.after(5000, self.check_connection_status)
+    def send_quick_message(self, message):
+        self.input_box.delete(0, "end")
+        self.input_box.insert(0, message)
+        self.send_message()
+    
+    def show_approval_request(self, action):
+        """Show action approval UI"""
+        if threading.current_thread() is not threading.main_thread():
+            self.enqueue_ui(self.show_approval_request, action)
+            return
+        self.approval_label.configure(text=f"⚠ Sol wants to: {action['description']}")
+        self.approval_frame.grid()
+        self.update_queue_status()
+    
+    def approve_action(self):
+        """User approves the action"""
+        if self.pending_action:
+            self.add_message("System", f"Executing: {self.pending_action['description']}", "action")
+            self.execute_pending_action()
+        self.update_queue_status()
+    
+    def deny_action(self):
+        """User denies the action"""
+        if self.pending_action:
+            self.add_message("System", f"Action denied: {self.pending_action['description']}", "system")
+            self.brain.memory.log_action(
+                action_type=self.pending_action['type'],
+                action_details=self.pending_action['params'],
+                approved=False,
+                result="User denied"
+            )
+        self.clear_pending_task()
+        self.update_queue_status()
+    
+    def execute_pending_action(self):
+        """Execute the pending action"""
+        if not self.pending_action:
+            return
+        
+        result = self.brain.execute_action(self.pending_action)
+        
+        if result['success']:
+            self.add_message("System", f"✓ Success: {result.get('message', 'Action completed')}", "system")
+        else:
+            self.add_message("System", f"✗ Failed: {result.get('error', 'Unknown error')}", "system")
 
+        self.pending_action = None
+        if self.pending_actions:
+            self.pending_action = self.pending_actions.pop(0)
+            if self.brain.approval_required:
+                self.show_approval_request(self.pending_action)
+            else:
+                self.execute_pending_action()
+        else:
+            self.hide_approval_ui()
+        self.update_queue_status()
+    
+    def hide_approval_ui(self):
+        """Hide the approval UI"""
+        if threading.current_thread() is not threading.main_thread():
+            self.enqueue_ui(self.hide_approval_ui)
+            return
+        self.approval_frame.grid_remove()
+
+    def clear_pending_task(self):
+        self.pending_action = None
+        self.pending_actions = []
+        self.hide_approval_ui()
+        self.update_queue_status()
+
+    def is_task_command(self, message):
+        normalized = message.strip().lower()
+        return (
+            normalized.startswith("/task")
+            or normalized.startswith("/agent")
+            or normalized.startswith("task:")
+            or normalized.startswith("agent:")
+        )
+
+    def extract_task_text(self, message):
+        text = message.strip()
+        lowered = text.lower()
+
+        for prefix in ["/task", "/agent"]:
+            if lowered.startswith(prefix):
+                return text[len(prefix):].strip() or text
+
+        for prefix in ["task:", "agent:"]:
+            if lowered.startswith(prefix):
+                return text[len(prefix):].strip() or text
+
+        return text
+
+    def process_task_message(self, message):
+        task_text = self.extract_task_text(message)
+        if not task_text or task_text.strip().lower() in ["/task", "/agent", "task:", "agent:"]:
+            self.add_message("System", "Please provide a task after /task.", "system")
+            return
+        plan = self.brain.plan_task(task_text)
+
+        self.add_message("Sol", plan["plan_text"], "assistant")
+        if plan.get("clarifying_questions"):
+            self.add_message("Sol", "Please answer the questions above.", "assistant")
+            return
+
+        actions = plan.get("actions") or []
+        if not actions:
+            self.add_message("System", "No safe actions detected for that plan.", "system")
+            return
+
+        self.pending_actions = actions
+        self.pending_action = self.pending_actions.pop(0)
+        self.show_approval_request(self.pending_action)
+        self.update_queue_status()
+
+    def start_monitoring(self):
+        monitor_thread = threading.Thread(target=self.monitor_loop, daemon=True)
+        monitor_thread.start()
+
+    def is_quiet_hours(self, config):
+        quiet = config.get("quiet_hours") or {}
+        start = quiet.get("start")
+        end = quiet.get("end")
+
+        if not start or not end:
+            return False
+
+        try:
+            start_time = datetime.strptime(start, "%H:%M").time()
+            end_time = datetime.strptime(end, "%H:%M").time()
+        except ValueError:
+            return False
+
+        now = datetime.now().time()
+        if start_time <= end_time:
+            return start_time <= now <= end_time
+        return now >= start_time or now <= end_time
+
+    def get_system_metrics(self, interval=1):
+        cpu_percent = psutil.cpu_percent(interval=interval)
+        memory_percent = psutil.virtual_memory().percent
+        if os.name == "nt":
+            root = os.environ.get("SystemDrive", "C:") + "\\"
+        else:
+            root = "/"
+        disk_percent = psutil.disk_usage(root).percent
+
+        return {
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory_percent,
+            "disk_percent": disk_percent
+        }
+
+    def build_suggestion(self, metrics, config):
+        suggestions = []
+        if metrics["cpu_percent"] >= config.get("cpu_percent", 85):
+            suggestions.append("I can list running apps to help find heavy usage.")
+        if metrics["memory_percent"] >= config.get("memory_percent", 85):
+            suggestions.append("I can list running apps to help free memory.")
+        if metrics["disk_percent"] >= config.get("disk_percent", 90):
+            suggestions.append("I can list your Downloads folder if you want to clean up.")
+
+        if not suggestions:
+            return ""
+
+        return "Suggestion: " + " ".join(suggestions)
+
+    def build_suggestion_actions(self, metrics, config):
+        actions = []
+        if (
+            metrics["cpu_percent"] >= config.get("cpu_percent", 85)
+            or metrics["memory_percent"] >= config.get("memory_percent", 85)
+        ):
+            actions.append({
+                "type": "list_running_apps",
+                "params": {},
+                "description": "List running apps"
+            })
+
+        if metrics["disk_percent"] >= config.get("disk_percent", 90):
+            downloads_dir = str(self.brain.actions.user_home / "Downloads")
+            actions.append({
+                "type": "list_directory",
+                "params": {"directory": downloads_dir},
+                "description": "List Downloads folder"
+            })
+
+        return actions
+
+    def monitor_loop(self):
+        while True:
+            config = self.brain.config.get("monitoring", {})
+            suggestions_config = self.brain.config.get("proactive_suggestions", {})
+            interval = max(5, int(config.get("interval_sec", 30)))
+            cooldown = suggestions_config.get("cooldown_sec", 600)
+            suggestions_enabled = self.suggestions_enabled and suggestions_config.get("enabled", False)
+            auto_queue = self.auto_queue_enabled and suggestions_config.get("auto_queue_actions", False)
+
+            if self.monitoring_enabled and not self.is_quiet_hours(config):
+                metrics = self.get_system_metrics()
+                alerts = []
+
+                if metrics["cpu_percent"] >= config.get("cpu_percent", 85):
+                    alerts.append(f"High CPU usage: {metrics['cpu_percent']:.0f}%")
+                if metrics["memory_percent"] >= config.get("memory_percent", 85):
+                    alerts.append(f"High memory usage: {metrics['memory_percent']:.0f}%")
+                if metrics["disk_percent"] >= config.get("disk_percent", 90):
+                    alerts.append(f"Low disk space: {metrics['disk_percent']:.0f}% used")
+
+                if alerts:
+                    self.add_message("System", " | ".join(alerts), "system")
+
+                    if suggestions_enabled:
+                        now = time.monotonic()
+                        if now - self.last_suggestion_time >= cooldown:
+                            actions = self.build_suggestion_actions(metrics, config)
+                            suggestion = self.build_suggestion(metrics, config)
+                            if suggestion:
+                                self.add_message("Sol", suggestion, "assistant")
+
+                            if auto_queue and actions and not self.pending_action and not self.pending_actions:
+                                self.pending_actions = actions
+                                self.pending_action = self.pending_actions.pop(0)
+                                self.show_approval_request(self.pending_action)
+
+                            self.last_suggestion_time = now
+
+            time.sleep(interval)
+    
+    def show_settings(self):
+        """Show settings window"""
+        settings_window = ctk.CTkToplevel(self.window)
+        settings_window.title("Sol Settings")
+        settings_window.geometry("520x520")
+        settings_window.configure(fg_color=COLORS["bg"])
+        
+        ctk.CTkLabel(
+            settings_window,
+            text="Settings",
+            font=FONTS["section"],
+            text_color=COLORS["text"]
+        ).pack(pady=20)
+        
+        # Connection test
+        test_btn = ctk.CTkButton(
+            settings_window,
+            text="Test LM Studio Connection",
+            command=self.test_lm_studio,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        test_btn.pack(pady=10)
+        
+        # View action log
+        log_btn = ctk.CTkButton(
+            settings_window,
+            text="View Action Log",
+            command=self.show_action_log,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        log_btn.pack(pady=10)
+
+        history_btn = ctk.CTkButton(
+            settings_window,
+            text="View Chat History",
+            command=self.show_chat_history,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        history_btn.pack(pady=10)
+
+        memory_btn = ctk.CTkButton(
+            settings_window,
+            text="Open Memory Vault",
+            command=self.show_memory_vault,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        memory_btn.pack(pady=10)
+
+        export_btn = ctk.CTkButton(
+            settings_window,
+            text="Export Chat History",
+            command=self.export_chat_history,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        export_btn.pack(pady=10)
+
+        dock_btn = ctk.CTkButton(
+            settings_window,
+            text="Toggle HUD Dock",
+            command=self.toggle_hud_dock,
+            fg_color=COLORS["panel_alt"],
+            hover_color=COLORS["outline"],
+            text_color=COLORS["text"]
+        )
+        dock_btn.pack(pady=10)
+        
+        # Clear memory
+        clear_btn = ctk.CTkButton(
+            settings_window,
+            text="Clear Conversation History",
+            command=self.clear_memory,
+            fg_color=COLORS["warning"],
+            hover_color="#d89a3d",
+            text_color=COLORS["bg"]
+        )
+        clear_btn.pack(pady=10)
+    
+    def test_lm_studio(self):
+        """Test connection to LM Studio"""
+        self.add_message("System", "Testing LM Studio connection...", "system")
+        
+        def test():
+            result = self.brain.test_connection()
+            if result['success']:
+                self.add_message("System", f"✓ Connected! Response: {result['response']}", "system")
+                self.set_connection_status("ONLINE")
+            else:
+                self.add_message("System", f"✗ Connection failed: {result['error']}", "system")
+                self.set_connection_status("OFFLINE")
+        
+        thread = threading.Thread(target=test)
+        thread.daemon = True
+        thread.start()
+    
+    def show_action_log(self):
+        """Show recent actions"""
+        actions = self.brain.memory.get_recent_actions(limit=5)
+        
+        if not actions:
+            self.add_message("System", "No recent actions.", "system")
+            return
+        
+        self.add_message("System", "Recent Actions:", "system")
+        for action in actions:
+            status = "✓ Approved" if action['approved'] else "✗ Denied"
+            self.add_message("System", f"  {status} - {action['action_type']}: {action['details']}", "system")
+
+    def show_chat_history(self):
+        """Show recent chat history"""
+        history_window = ctk.CTkToplevel(self.window)
+        history_window.title("Chat History")
+        history_window.geometry("700x500")
+        history_window.configure(fg_color=COLORS["bg"])
+
+        ctk.CTkLabel(
+            history_window,
+            text="Chat History",
+            font=FONTS["section"],
+            text_color=COLORS["text"]
+        ).pack(pady=12)
+
+        history_box = ctk.CTkTextbox(
+            history_window,
+            fg_color=COLORS["panel_alt"],
+            text_color=COLORS["text"],
+            font=FONTS["body"],
+            wrap="word"
+        )
+        history_box.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+        messages = self.brain.memory.get_conversation_history_with_timestamps(limit=200)
+        if not messages:
+            history_box.insert("end", "No messages found.")
+        else:
+            for item in messages:
+                timestamp = item.get("timestamp", "")
+                role = item.get("role", "")
+                content = item.get("content", "")
+
+                try:
+                    time_label = datetime.fromisoformat(timestamp).strftime("%H:%M")
+                except Exception:
+                    time_label = "--:--"
+
+                role_label = role.capitalize() if role else "Unknown"
+                history_box.insert("end", f"[{time_label}] {role_label}: {content}\n\n")
+
+        history_box.configure(state="disabled")
+    
+    def clear_memory(self):
+        """Clear conversation history"""
+        self.brain.memory.clear_old_conversations(keep_last=0)
+        self.add_message("System", "Conversation history cleared.", "system")
+    
     def run(self):
+        """Start the GUI"""
         self.window.mainloop()
 
 
-def main():
-    gui = SolGUI()
-    gui.run()
-
-
 if __name__ == "__main__":
-    main()
+    app = SolGUI()
+    app.run()
