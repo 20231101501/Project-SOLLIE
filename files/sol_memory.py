@@ -29,6 +29,7 @@ class SolMemory:
             "conversations": [],
             "user_memory": [],
             "action_log": [],
+            "sessions": [],
             "next_ids": {
                 "conversation": 1,
                 "user_memory": 1,
@@ -516,3 +517,44 @@ class SolMemory:
                 self._store["conversations"] = conversations[-keep_last:]
 
             self._save_store()
+
+    def start_new_session(self, session_name=None):
+        """Start a new chat session, preserving user memory and profile.
+        Archives current conversations to sessions history and clears chat history.
+        Returns the new session ID."""
+        with self._lock:
+            now = self._now()
+
+            # Save current conversations as a session
+            current_conversations = list(self._store.get("conversations", []))
+            if current_conversations:
+                session_data = {
+                    "id": len(self._store.get("sessions", [])) + 1,
+                    "timestamp": now,
+                    "name": session_name or f"Session {len(self._store.get('sessions', [])) + 1}",
+                    "messages": current_conversations
+                }
+                self._store.setdefault("sessions", []).append(session_data)
+
+            # Clear conversation history but keep user_memory and profile
+            self._store["conversations"] = []
+            self._store["next_ids"]["conversation"] = 1
+
+            self._save_store()
+            return len(self._store.get("sessions", []))
+
+    def get_sessions(self):
+        """Get all archived sessions"""
+        with self._lock:
+            return list(self._store.get("sessions", []))
+
+    def load_session(self, session_id):
+        """Load a previous session's conversations (replaces current history)"""
+        with self._lock:
+            sessions = self._store.get("sessions", [])
+            session = next((s for s in sessions if s.get("id") == session_id), None)
+            if session:
+                self._store["conversations"] = session.get("messages", [])
+                self._save_store()
+                return True
+            return False

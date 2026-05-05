@@ -389,7 +389,20 @@ class SolGUI:
             height=40,
             width=100
         )
-        export_btn.pack(side="left")
+        export_btn.pack(side="left", padx=(0, 8))
+
+        new_session_btn = ctk.CTkButton(
+            button_frame,
+            text="New Session",
+            command=self.start_new_session,
+            fg_color=self.colors["panel_alt"],
+            hover_color=self.colors["outline"],
+            text_color=self.colors["warning"],
+            font=self.fonts["body_bold"],
+            height=40,
+            width=120
+        )
+        new_session_btn.pack(side="left")
 
         self.add_message("SYSTEM", "SOL initialized. Ready.", "system")
 
@@ -791,6 +804,15 @@ class SolGUI:
         self.chat_display.configure(state="normal")
         self.chat_display.delete("1.0", "end")
         self.add_message("SYSTEM", "Chat cleared.", "system")
+
+    def start_new_session(self):
+        """Start a new session, preserving user memory and profile"""
+        if self.brain:
+            session_id = self.brain.start_new_session()
+            self.chat_display.configure(state="normal")
+            self.chat_display.delete("1.0", "end")
+            self.add_message("SYSTEM", f"New session started (ID: {session_id}). Chat history archived. User memory preserved.", "system")
+            self.add_message("SOL", "Hey, I'm here. What's on your mind?", "assistant")
 
     def export_chat(self):
         try:

@@ -10,8 +10,10 @@ import json
 import sys
 import random
 import shutil
+import time
 from pathlib import Path
 import webbrowser
+from datetime import datetime, timedelta
 
 
 class SolActions:
@@ -539,3 +541,252 @@ class SolActions:
     def write_file_content(self, filepath, content):
         """Write content to a file (overwrites existing)"""
         return self.create_file(filepath, content)
+
+    # ===== REMINDER SYSTEM =====
+    
+    def _get_reminders_path(self):
+        """Get the path to the reminders JSON file"""
+        return Path.home() / ".sol_reminders.json"
+    
+    def _load_reminders(self):
+        """Load reminders from disk"""
+        path = self._get_reminders_path()
+        if path.exists():
+            try:
+                with open(path, 'r') as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return []
+    
+    def _save_reminders(self, reminders):
+        """Save reminders to disk"""
+        path = self._get_reminders_path()
+        try:
+            with open(path, 'w') as f:
+                json.dump(reminders, f, indent=2)
+        except Exception:
+            pass
+    
+    def set_reminder(self, message, delay_minutes=None, remind_time=None):
+        """Set a reminder. Either provide delay_minutes or remind_time (ISO format)"""
+        try:
+            reminder = {
+                "id": int(time.time() * 1000),
+                "message": message,
+                "created": datetime.now().isoformat()
+            }
+            
+            if delay_minutes is not None:
+                remind_at = datetime.now() + timedelta(minutes=delay_minutes)
+                reminder["remind_at"] = remind_at.isoformat()
+            elif remind_time:
+                reminder["remind_at"] = remind_time
+            else:
+                return {"success": False, "error": "Must provide delay_minutes or remind_time"}
+            
+            reminders = self._load_reminders()
+            reminders.append(reminder)
+            self._save_reminders(reminders)
+            
+            return {"success": True, "message": f"Reminder set for {reminder['remind_at']}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def list_reminders(self):
+        """List all pending reminders"""
+        try:
+            reminders = self._load_reminders()
+            now = datetime.now()
+            pending = []
+            for r in reminders:
+                try:
+                    remind_at = datetime.fromisoformat(r["remind_at"])
+                    if remind_at > now:
+                        pending.append(r)
+                except (KeyError, ValueError):
+                    pass
+            return {"success": True, "reminders": pending}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def check_reminders(self):
+        """Check for due reminders and return them"""
+        try:
+            reminders = self._load_reminders()
+            now = datetime.now()
+            due = []
+            remaining = []
+            
+            for r in reminders:
+                try:
+                    remind_at = datetime.fromisoformat(r["remind_at"])
+                    if remind_at <= now:
+                        due.append(r)
+                    else:
+                        remaining.append(r)
+                except (KeyError, ValueError):
+                    remaining.append(r)
+            
+            if due:
+                self._save_reminders(remaining)
+            
+            return {"success": True, "due": due, "count": len(due)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def clear_reminder(self, reminder_id):
+        """Clear a specific reminder by ID"""
+        try:
+            reminders = self._load_reminders()
+            new_reminders = [r for r in reminders if r.get("id") != reminder_id]
+            self._save_reminders(new_reminders)
+            return {"success": True, "message": "Reminder cleared"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    # ===== WEB SEARCH =====
+    
+    def web_search(self, query, max_results=5):
+        """Perform a web search using DuckDuckGo (no API key required)"""
+        try:
+            import urllib.parse
+            import urllib.request
+            from html.parser import HTMLParser
+            
+            class DuckDuckGoParser(HTMLParser):
+                def __init__(self):
+                    super().__init__()
+                    self.results = []
+                    self.current_result = {}
+                    self.in_result = False
+                    self.in_title = False
+                    self.in_snippet = False
+                    self.title = ""
+                    self.snippet = ""
+                    self.href = ""
+                    
+                def handle_starttag(self, tag, attrs):
+                    attrs_dict = dict(attrs)
+                    if tag == 'article' or (tag == 'div' and attrs_dict.get('class') == 'result'):
+                        self.in_result = True
+                        self.current_result = {}
+                    if self.in_result and tag == 'a':
+                        self.href = attrs_dict.get('href', '')
+                        self.in_title = True
+                    if self.in_result and tag == 'span' and attrs_dict.get('class') == 'result-snippet':
+                        self.in_snippet = True
+                
+                def handle_endtag(self, tag):
+                    if tag == 'article' or (tag == 'div' and self.in_result):
+                        if self.title and self.href:
+                            self.results.append({
+                                'title': self.title.strip(),
+                                'href': self.href,
+                                'snippet': self.snippet.strip()
+                            })
+                        self.in_result = False
+                        self.title = ""
+                        self.snippet = ""
+                        self.href = ""
+                    if tag == 'a' and self.in_title:
+                        self.in_title = False
+                    if tag == 'span' and self.in_snippet:
+                        self.in_snippet = False
+                
+                def handle_data(self, data):
+                    if self.in_title:
+                        self.title += data
+                    if self.in_snippet:
+                        self.snippet += data
+            
+            # Use DuckDuckGo HTML search
+            query_encoded = urllib.parse.quote_plus(query)
+            url = f"https://html.duckduckgo.com/html/?q={query_encoded}"
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as response:
+                html = response.read().decode('utf-8')
+            
+            parser = DuckDuckGoParser()
+            parser.feed(html)
+            
+            results = parser.results[:max_results]
+            
+            if not results:
+                return {"success": False, "error": "No results found", "results": []}
+            
+            return {"success": True, "results": results, "count": len(results)}
+        except Exception as e:
+            return {"success": False, "error": str(e), "results": []}
+    
+    def get_weather(self, location="auto:ip"):
+        """Get weather information (uses wttr.in, no API key required)"""
+        try:
+            import urllib.request
+            import json as json_mod
+            
+            # Use wttr.in - free weather service, no API key
+            if location == "auto:ip":
+                url = "https://wttr.in/?format=j1"
+            else:
+                url = f"https://wttr.in/{urllib.parse.quote_plus(location)}?format=j1"
+            
+            headers = {'User-Agent': 'Sol/1.0'}
+            req = urllib.request.Request(url, headers=headers)
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json_mod.loads(response.read().decode('utf-8'))
+            
+            current = data.get('current_condition', [{}])[0]
+            weather_info = {
+                "location": data.get('nearest_area', [{}])[0].get('areaName', [{}])[0].get('value', 'Unknown'),
+                "temperature_c": int(current.get('temp_C', 0)),
+                "temperature_f": int(current.get('temp_F', 0)),
+                "description": current.get('weatherDesc', [{}])[0].get('value', 'Unknown'),
+                "humidity": int(current.get('humidity', 0)),
+                "wind_kmph": int(current.get('windspeedKmph', 0)),
+                "feels_like_c": int(current.get('FeelsLikeC', 0))
+            }
+            
+            return {"success": True, "weather": weather_info}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def get_news_headlines(self, topic="top"):
+        """Get news headlines (uses Hacker News API as free source)"""
+        try:
+            import urllib.request
+            import json as json_mod
+            
+            # Use Hacker News Algo feed as a simple news source
+            url = "https://hacker-news.firebaseio.com/v0/topstories.json"
+            headers = {'User-Agent': 'Sol/1.0'}
+            req = urllib.request.Request(url, headers=headers)
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                story_ids = json_mod.loads(response.read().decode('utf-8'))[:10]
+            
+            headlines = []
+            for story_id in story_ids[:5]:
+                try:
+                    story_url = f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json"
+                    story_req = urllib.request.Request(story_url, headers=headers)
+                    with urllib.request.urlopen(story_req, timeout=5) as story_response:
+                        story = json_mod.loads(story_response.read().decode('utf-8'))
+                        if story.get('title'):
+                            headlines.append({
+                                'title': story['title'],
+                                'url': story.get('url', ''),
+                                'score': story.get('score', 0)
+                            })
+                except Exception:
+                    continue
+            
+            return {"success": True, "headlines": headlines, "count": len(headlines)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
