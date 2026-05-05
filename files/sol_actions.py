@@ -11,6 +11,7 @@ import sys
 import random
 import shutil
 import time
+import threading
 from pathlib import Path
 import webbrowser
 from datetime import datetime, timedelta
@@ -55,6 +56,41 @@ class SolActions:
             self.allowed_file_extensions = {ext.lower() for ext in configured_extensions}
         else:
             self.allowed_file_extensions = default_extensions
+        # Reminder checker thread
+        self._reminder_thread = None
+        self._reminder_callbacks = []
+        self._start_reminder_checker()
+
+    def _reminder_checker(self):
+        """Background thread to check for due reminders"""
+        while True:
+            try:
+                time.sleep(10)  # Check every 10 seconds
+                result = self.check_reminders()
+                if result.get("success") and result.get("count", 0) > 0:
+                    due_reminders = result.get("due", [])
+                    for reminder in due_reminders:
+                        message = reminder.get("message", "Reminder!")
+                        # Call all registered callbacks
+                        for callback in self._reminder_callbacks:
+                            try:
+                                callback(message, reminder)
+                            except Exception:
+                                pass
+                        # Also print to stdout for simple notification
+                        print(f"\n[REMINDER] {message}")
+            except Exception:
+                pass
+
+    def _start_reminder_checker(self):
+        """Start the background reminder checker thread"""
+        if self._reminder_thread is None or not self._reminder_thread.is_alive():
+            self._reminder_thread = threading.Thread(target=self._reminder_checker, daemon=True)
+            self._reminder_thread.start()
+
+    def register_reminder_callback(self, callback):
+        """Register a callback function to be called when reminders are due"""
+        self._reminder_callbacks.append(callback)
     
     def load_config(self, config_path):
         """Load configuration from JSON file"""
@@ -648,79 +684,48 @@ class SolActions:
     # ===== WEB SEARCH =====
     
     def web_search(self, query, max_results=5):
-        """Perform a web search using DuckDuckGo (no API key required)"""
+        """Perform a web search using DuckDuckGo instant answer API (no API key required)"""
         try:
             import urllib.parse
             import urllib.request
-            from html.parser import HTMLParser
+            import json as json_mod
             
-            class DuckDuckGoParser(HTMLParser):
-                def __init__(self):
-                    super().__init__()
-                    self.results = []
-                    self.current_result = {}
-                    self.in_result = False
-                    self.in_title = False
-                    self.in_snippet = False
-                    self.title = ""
-                    self.snippet = ""
-                    self.href = ""
-                    
-                def handle_starttag(self, tag, attrs):
-                    attrs_dict = dict(attrs)
-                    if tag == 'article' or (tag == 'div' and attrs_dict.get('class') == 'result'):
-                        self.in_result = True
-                        self.current_result = {}
-                    if self.in_result and tag == 'a':
-                        self.href = attrs_dict.get('href', '')
-                        self.in_title = True
-                    if self.in_result and tag == 'span' and attrs_dict.get('class') == 'result-snippet':
-                        self.in_snippet = True
-                
-                def handle_endtag(self, tag):
-                    if tag == 'article' or (tag == 'div' and self.in_result):
-                        if self.title and self.href:
-                            self.results.append({
-                                'title': self.title.strip(),
-                                'href': self.href,
-                                'snippet': self.snippet.strip()
-                            })
-                        self.in_result = False
-                        self.title = ""
-                        self.snippet = ""
-                        self.href = ""
-                    if tag == 'a' and self.in_title:
-                        self.in_title = False
-                    if tag == 'span' and self.in_snippet:
-                        self.in_snippet = False
-                
-                def handle_data(self, data):
-                    if self.in_title:
-                        self.title += data
-                    if self.in_snippet:
-                        self.snippet += data
-            
-            # Use DuckDuckGo HTML search
+            # Use DuckDuckGo instant answer API - more reliable than HTML scraping
             query_encoded = urllib.parse.quote_plus(query)
-            url = f"https://html.duckduckgo.com/html/?q={query_encoded}"
+            url = f"https://api.duckduckgo.com/?q={query_encoded}&format=json&no_html=1"
             
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            
+            headers = {'User-Agent': 'Sol/1.0'}
             req = urllib.request.Request(url, headers=headers)
+            
             with urllib.request.urlopen(req, timeout=10) as response:
-                html = response.read().decode('utf-8')
+                data = json_mod.loads(response.read().decode('utf-8'))
             
-            parser = DuckDuckGoParser()
-            parser.feed(html)
+            results = []
             
-            results = parser.results[:max_results]
+            # Extract instant answer
+            abstract = data.get('AbstractText', '')
+            if abstract:
+                results.append({
+                    'title': data.get('Heading', query),
+                    'href': data.get('AbstractSourceUrl', ''),
+                    'snippet': abstract[:200]
+                })
+            
+            # Extract related topics
+            for topic in data.get('RelatedTopics', [])[:max_results-1]:
+                if isinstance(topic, dict) and 'Text' in topic:
+                    title = topic.get('Text', '')[:100]
+                    href = topic.get('FirstURL', '')
+                    results.append({
+                        'title': title,
+                        'href': href,
+                        'snippet': topic.get('Text', '')[:200]
+                    })
             
             if not results:
                 return {"success": False, "error": "No results found", "results": []}
             
-            return {"success": True, "results": results, "count": len(results)}
+            return {"success": True, "results": results[:max_results], "count": len(results)}
         except Exception as e:
             return {"success": False, "error": str(e), "results": []}
     
@@ -730,30 +735,31 @@ class SolActions:
             import urllib.request
             import json as json_mod
             
-            # Use wttr.in - free weather service, no API key
+            # Use wttr.in text format - more reliable
             if location == "auto:ip":
-                url = "https://wttr.in/?format=j1"
+                url = "https://wttr.in/?format=3"
             else:
-                url = f"https://wttr.in/{urllib.parse.quote_plus(location)}?format=j1"
+                url = f"https://wttr.in/{urllib.parse.quote_plus(location)}?format=3"
             
             headers = {'User-Agent': 'Sol/1.0'}
             req = urllib.request.Request(url, headers=headers)
             
-            with urllib.request.urlopen(req, timeout=10) as response:
-                data = json_mod.loads(response.read().decode('utf-8'))
+            try:
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    weather_text = response.read().decode('utf-8').strip()
+            except urllib.error.HTTPError:
+                # Fallback: try j1 format
+                if location != "auto:ip":
+                    url = f"https://wttr.in/{urllib.parse.quote_plus(location)}?format=j1"
+                else:
+                    url = "https://wttr.in/?format=j1"
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    data = json_mod.loads(response.read().decode('utf-8'))
+                    current = data.get('current_condition', [{}])[0]
+                    weather_text = f"{data.get('nearest_area', [{}])[0].get('areaName', [{}])[0].get('value', 'Unknown')}: {current.get('weatherDesc', [{}])[0].get('value', '')} {current.get('temp_C', '0')}°C"
             
-            current = data.get('current_condition', [{}])[0]
-            weather_info = {
-                "location": data.get('nearest_area', [{}])[0].get('areaName', [{}])[0].get('value', 'Unknown'),
-                "temperature_c": int(current.get('temp_C', 0)),
-                "temperature_f": int(current.get('temp_F', 0)),
-                "description": current.get('weatherDesc', [{}])[0].get('value', 'Unknown'),
-                "humidity": int(current.get('humidity', 0)),
-                "wind_kmph": int(current.get('windspeedKmph', 0)),
-                "feels_like_c": int(current.get('FeelsLikeC', 0))
-            }
-            
-            return {"success": True, "weather": weather_info}
+            return {"success": True, "weather": {"simple": weather_text}}
         except Exception as e:
             return {"success": False, "error": str(e)}
     
@@ -788,5 +794,34 @@ class SolActions:
                     continue
             
             return {"success": True, "headlines": headlines, "count": len(headlines)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+    def save_settings_action(self, **kwargs):
+        """Save a setting value to config.json"""
+        setting = kwargs.get('setting', '')
+        value = kwargs.get('value', '')
+        
+        if not setting:
+            return {"success": False, "error": "No setting specified"}
+        
+        try:
+            with open(self.config_path, 'r') as f:
+                config = json.load(f)
+            
+            # Parse setting path (e.g., "lm_studio.temperature")
+            parts = setting.split('.')
+            if len(parts) == 2:
+                section, key = parts
+                config.setdefault(section, {})
+                config[section][key] = value
+            else:
+                config[setting] = value
+            
+            with open(self.config_path, 'w') as f:
+                json.dump(config, f, indent=2)
+            
+            return {"success": True, "message": f"Setting '{setting}' saved"}
         except Exception as e:
             return {"success": False, "error": str(e)}
