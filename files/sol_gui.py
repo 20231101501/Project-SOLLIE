@@ -16,6 +16,7 @@ from tkinter import filedialog
 from datetime import datetime
 import psutil
 from sol_core import SolBrain
+from sol_monitor import SolMonitor
 
 CYBERDECK_COLORS = {
     "bg": "#0a0e27",
@@ -79,6 +80,7 @@ class SolGUI:
     def __init__(self):
         self.brain = SolBrain()
         self.pending_action = None
+        self.pending_actions = []  # Queue for multiple pending actions
         self.connection_status = "UNKNOWN"
         self.config_path = os.path.join(os.path.dirname(__file__), "config.json")
         self.last_response_seconds = None
@@ -387,7 +389,20 @@ class SolGUI:
             height=40,
             width=100
         )
-        export_btn.pack(side="left")
+        export_btn.pack(side="left", padx=(0, 8))
+
+        new_session_btn = ctk.CTkButton(
+            button_frame,
+            text="New Session",
+            command=self.start_new_session,
+            fg_color=self.colors["panel_alt"],
+            hover_color=self.colors["outline"],
+            text_color=self.colors["warning"],
+            font=self.fonts["body_bold"],
+            height=40,
+            width=120
+        )
+        new_session_btn.pack(side="left")
 
         self.add_message("SYSTEM", "SOL initialized. Ready.", "system")
 
@@ -790,6 +805,15 @@ class SolGUI:
         self.chat_display.delete("1.0", "end")
         self.add_message("SYSTEM", "Chat cleared.", "system")
 
+    def start_new_session(self):
+        """Start a new session, preserving user memory and profile"""
+        if self.brain:
+            session_id = self.brain.start_new_session()
+            self.chat_display.configure(state="normal")
+            self.chat_display.delete("1.0", "end")
+            self.add_message("SYSTEM", f"New session started (ID: {session_id}). Chat history archived. User memory preserved.", "system")
+            self.add_message("SOL", "Hey, I'm here. What's on your mind?", "assistant")
+
     def export_chat(self):
         try:
             file_path = filedialog.asksaveasfilename(
@@ -875,51 +899,61 @@ class SolGUI:
             self.set_status("ERROR", self.colors["danger"])
             self.set_connection_status("OFFLINE")
 
-    def handle_action_approval(self, action):
-        """Prompt user to approve an action and execute if approved"""
+    def show_action_approval(self, action):
+        """Show approval dialog for an action (called from UI thread)"""
         action_desc = action.get('description', str(action))
-        
+
         dialog = ctk.CTkToplevel(self.window)
         dialog.title("Action Approval Required")
-        dialog.geometry("400x180")
+        dialog.geometry("400x200")
         dialog.resizable(False, False)
         dialog.transient(self.window)
         dialog.grab_set()
-        
+
         ctk.CTkLabel(
             dialog,
             text=f"Sol wants to perform this action:\n\n{action_desc}",
             wraplength=350,
             font=("Segoe UI", 12)
         ).pack(pady=(20, 10), padx=20)
-        
+
+        # Show queue info if there are more actions
+        if self.pending_actions:
+            queue_info = ctk.CTkLabel(
+                dialog,
+                text=f"+ {len(self.pending_actions)} more action(s) queued",
+                font=("Segoe UI", 10),
+                text_color=self.colors["muted"]
+            )
+            queue_info.pack(pady=(0, 10))
+
         button_frame = ctk.CTkFrame(dialog, fg_color="transparent")
         button_frame.pack(pady=10)
-        
+
         result = {"approved": False}
-        
+
         def on_approve():
             result["approved"] = True
             dialog.destroy()
-        
+
         def on_deny():
             result["approved"] = False
             dialog.destroy()
-        
+
         ctk.CTkButton(
             button_frame, text="Allow", width=100,
             fg_color=self.colors["success"], hover_color=self.colors["success"],
             command=on_approve
         ).pack(side="left", padx=10)
-        
+
         ctk.CTkButton(
             button_frame, text="Deny", width=100,
             fg_color=self.colors["danger"], hover_color=self.colors["danger"],
             command=on_deny
         ).pack(side="left", padx=10)
-        
+
         self.window.wait_window(dialog)
-        
+
         if result["approved"]:
             self.add_message("SYSTEM", f"ACTION APPROVED: {action_desc}", "system")
             thread = threading.Thread(target=self.execute_pending_action)
@@ -927,17 +961,23 @@ class SolGUI:
             thread.start()
         else:
             self.add_message("SYSTEM", f"ACTION DENIED: {action_desc}", "system")
-            self.pending_action = None
+            self._clear_pending_actions()
+
+    def handle_action_approval(self, action):
+        """Prompt user to approve an action (alias for show_action_approval)"""
+        self.enqueue_ui(self.show_action_approval, action)
 
     def execute_pending_action(self):
-        """Execute the currently pending action"""
+        """Execute the currently pending action and proceed to next in queue"""
         if not self.pending_action:
             return
-        
+
         try:
-            self.add_message("SYSTEM", "Executing action...", "system")
+            action_desc = self.pending_action.get('description', 'Unknown action')
+            self.add_message("SYSTEM", f"Executing: {action_desc}", "system")
+
             result = self.brain.execute_action(self.pending_action)
-            
+
             if result.get('success'):
                 self.add_message("SYSTEM", f"Action succeeded: {result.get('message', 'Done')}", "system")
             else:
@@ -945,7 +985,18 @@ class SolGUI:
         except Exception as e:
             self.add_message("SYSTEM", f"Execution error: {str(e)}", "system")
         finally:
-            self.pending_action = None
+            # Move to next action in queue
+            if self.pending_actions:
+                self.pending_action = self.pending_actions.pop(0)
+                # Show approval for next action
+                self.enqueue_ui(self.show_action_approval, self.pending_action)
+            else:
+                self.pending_action = None
+
+    def _clear_pending_actions(self):
+        """Clear all pending actions"""
+        self.pending_action = None
+        self.pending_actions = []
 
     def set_status(self, text, color):
         if threading.current_thread() is not threading.main_thread():
@@ -969,37 +1020,52 @@ class SolGUI:
 
     def update_system_monitor(self):
         try:
-            cpu = psutil.cpu_percent(interval=0.5)
-            ram = psutil.virtual_memory().percent
-            disk = psutil.disk_usage('/').percent
-            self.sysmon_label.configure(text=f"CPU: {cpu:.0f}% | RAM: {ram:.0f}% | Disk: {disk:.0f}%")
+            if hasattr(self, 'sol_monitor'):
+                metrics = self.sol_monitor.get_all_metrics()
+                cpu = metrics.get("cpu_percent", 0)
+                ram = metrics.get("memory_percent", 0)
+                disk = metrics.get("disk_percent", 0)
+                net_up = metrics.get("network_upload_mbps", 0)
+                net_down = metrics.get("network_download_mbps", 0)
+
+                monitor_text = f"CPU: {cpu:.0f}% | RAM: {ram:.0f}% | Disk: {disk:.0f}%"
+                if net_up or net_down:
+                    monitor_text += f" | ↑{net_up:.1f} ↓{net_down:.1f} MB/s"
+                self.sysmon_label.configure(text=monitor_text)
+            else:
+                cpu = psutil.cpu_percent(interval=0.5)
+                ram = psutil.virtual_memory().percent
+                disk = psutil.disk_usage('/').percent
+                self.sysmon_label.configure(text=f"CPU: {cpu:.0f}% | RAM: {ram:.0f}% | Disk: {disk:.0f}%")
         except Exception:
             pass
         self.window.after(5000, self.update_system_monitor)
 
     def _monitoring_loop(self):
-        """Background thread for proactive system monitoring"""
+        """Background thread for Jarvis-style proactive system monitoring"""
         while True:
             try:
                 if not self.monitoring_config.get("enabled", True):
                     time.sleep(30)
                     continue
-                
-                # Check quiet hours
-                if self._is_quiet_hours():
+
+                # Check quiet hours (allow critical alerts to pass)
+                quiet = self._is_quiet_hours()
+                if quiet and not self._has_critical_alerts():
                     time.sleep(60)
                     continue
-                
-                # Get system metrics
-                cpu = psutil.cpu_percent(interval=1)
-                memory = psutil.virtual_memory().percent
-                disk = psutil.disk_usage('/').percent
-                
-                # Check thresholds and alert
-                self._check_and_alert("cpu", cpu, self.monitoring_config.get("cpu_percent", 85))
-                self._check_and_alert("memory", memory, self.monitoring_config.get("memory_percent", 85))
-                self._check_and_alert("disk", disk, self.monitoring_config.get("disk_percent", 90))
-                
+
+                # Get all metrics via SolMonitor
+                metrics = self.sol_monitor.get_all_metrics()
+
+                # Process each metric with smart alerting
+                for metric in ["cpu", "memory", "disk"]:
+                    self._process_metric_alert(metric, metrics, quiet)
+
+                # Check battery if available
+                if "battery_percent" in metrics:
+                    self._check_battery(metrics)
+
                 # Sleep for configured interval
                 interval = self.monitoring_config.get("interval_sec", 30)
                 time.sleep(interval)
@@ -1012,11 +1078,11 @@ class SolGUI:
             quiet = self.monitoring_config.get("quiet_hours", {})
             start_str = quiet.get("start", "23:00")
             end_str = quiet.get("end", "07:00")
-            
+
             now = datetime.now().time()
             start_time = datetime.strptime(start_str, "%H:%M").time()
             end_time = datetime.strptime(end_str, "%H:%M").time()
-            
+
             if start_time <= end_time:
                 return start_time <= now <= end_time
             else:  # Crosses midnight
@@ -1024,31 +1090,204 @@ class SolGUI:
         except Exception:
             return False
 
-    def _check_and_alert(self, metric, value, threshold):
-        """Check if metric exceeds threshold and send chat alert"""
-        if value <= threshold:
+    def _has_critical_alerts(self):
+        """Check if any metrics are at critical level (to bypass quiet hours)"""
+        if not hasattr(self, 'sol_monitor'):
+            return False
+        metrics = self.sol_monitor.get_all_metrics()
+        return any([
+            metrics.get("cpu_critical", False),
+            metrics.get("memory_critical", False),
+            metrics.get("disk_critical", False)
+        ])
+
+    def _process_metric_alert(self, metric, metrics, quiet=False):
+        """Process alert for a specific metric with smart logic"""
+        level = self.sol_monitor.get_alert_level(metric, metrics)
+        if not level:
+            # Clear any existing alert state
+            if metric in self.alert_levels:
+                del self.alert_levels[metric]
             return
-        
+
+        # Check if we should escalate
+        escalate = self.sol_monitor.should_escalate(metric, metrics)
+        trend = metrics.get(f"{metric}_trend", "stable")
+
+        # Determine message based on level and escalation
+        if level == "critical" and escalate:
+            alert_type = "critical_escalated"
+        elif level == "critical":
+            alert_type = "critical"
+        else:
+            alert_type = "warning"
+
         # Check cooldown
         now = time.time()
         cooldown = self.proactive_config.get("cooldown_sec", 600)
-        last_alert = self.last_alert_time.get(metric, 0)
-        
-        if now - last_alert < cooldown:
+        last_alert_time = self.last_alert_time.get(metric, 0)
+
+        # Reduced cooldown for critical/escalated
+        if alert_type == "critical_escalated":
+            cooldown = cooldown // 2
+
+        if now - last_alert_time < cooldown and self.alert_levels.get(metric) == alert_type:
             return
-        
-        # Generate alert message
-        alert_messages = {
-            "cpu": f"Hey boss, your CPU is at {value:.0f}% - might want to close some apps.",
-            "memory": f"Boss, memory usage is at {value:.0f}%. System's getting heavy.",
-            "disk": f"Heads up - disk space is at {value:.0f}%. Time for some cleanup."
-        }
-        
-        message = alert_messages.get(metric, f"{metric} is at {value:.0f}%")
-        
-        # Post to chat via UI queue
-        self.enqueue_ui(self.add_message, "SOL", message, "system")
+
+        # Generate and send alert
+        self._send_metric_alert(metric, metrics, alert_type, trend, quiet)
         self.last_alert_time[metric] = now
+        self.alert_levels[metric] = alert_type
+
+        # Log to memory if available
+        self._log_alert_to_memory(metric, metrics, alert_type)
+
+    def _send_metric_alert(self, metric, metrics, alert_type, trend, quiet=False):
+        """Send alert message to chat"""
+        value = metrics.get(f"{metric}_percent", 0)
+
+        # Try LLM-generated message if brain is available
+        message = self._generate_alert_message(metric, value, alert_type, trend, metrics)
+
+        # Choose message style based on quiet hours
+        prefix = "SOL" if not quiet else "SOL [URGENT]"
+
+        self.enqueue_ui(self.add_message, prefix, message, "system")
+
+        # If auto-queue actions enabled, suggest remediation
+        if self.proactive_config.get("auto_queue_actions", True):
+            self._suggest_remediation(metric, metrics)
+
+    def _generate_alert_message(self, metric, value, alert_type, trend, metrics):
+        """Generate alert message using LLM if available, otherwise use templates"""
+        try:
+            # Get mood for personality-aware messaging
+            mood = self.brain.personality.get_mood_state()
+            mood_label = mood.get("label", "calm")
+
+            # Build context for LLM
+            context = f"""System Alert:
+- Metric: {metric.upper()}
+- Value: {value:.0f}%
+- Level: {alert_type}
+- Trend: {trend}
+- Your mood: {mood_label}
+
+Generate a short, personality-consistent alert message (max 20 words). Be helpful and witty."""
+
+            # Try to use LLM
+            if hasattr(self.brain, 'llm_client'):
+                messages = [
+                    {"role": "system", "content": self.brain.config["sol"]["personality"]},
+                    {"role": "user", "content": context}
+                ]
+                response = self.brain.llm_client.chat(messages, max_tokens=60)
+                if response and len(response.strip()) > 5:
+                    return response.strip()
+        except Exception:
+            pass
+
+        # Fallback to template messages
+        return self._get_template_alert(metric, value, alert_type, trend)
+
+    def _get_template_alert(self, metric, value, alert_type, trend):
+        """Fallback template alerts"""
+        trend_emoji = "📈" if trend == "rising" else "➡️" if trend == "stable" else "📉"
+
+        if alert_type == "critical_escalated":
+            templates = {
+                "cpu": f"{trend_emoji} CRITICAL: CPU has been at {value:.0f}% for too long. I recommend closing apps NOW.",
+                "memory": f"{trend_emoji} CRITICAL: Memory critical at {value:.0f}%. System instability likely.",
+                "disk": f"{trend_emoji} CRITICAL: Disk space critical at {value:.0f}%. Clean up immediately."
+            }
+        elif alert_type == "critical":
+            templates = {
+                "cpu": f"{trend_emoji} CPU is at {value:.0f}% - running hot, boss!",
+                "memory": f"{trend_emoji} Memory at {value:.0f}% - things are getting heavy.",
+                "disk": f"{trend_emoji} Disk space at {value:.0f}% - cleanup time!"
+            }
+        else:  # warning
+            templates = {
+                "cpu": f"{trend_emoji} CPU at {value:.0f}% - starting to heat up.",
+                "memory": f"{trend_emoji} Memory at {value:.0f}% - keep an eye on it.",
+                "disk": f"{trend_emoji} Disk at {value:.0f}% - might want to clean up soon."
+            }
+
+        return templates.get(metric, f"{metric.upper()} is at {value:.0f}%")
+
+    def _suggest_remediation(self, metric, metrics):
+        """Queue actionable remediation steps based on the alert"""
+        actions = []
+
+        if metric == "cpu" or metric == "memory":
+            top_processes = metrics.get(f"top_{metric}_processes", [])
+            if top_processes:
+                proc_list = ", ".join([p.get('name', 'unknown') for p in top_processes[:3]])
+                message = f"Top processes: {proc_list}. Want me to close any of these?"
+                self.enqueue_ui(self.add_message, "SOL", message, "system")
+
+                # Queue action to list running apps
+                actions.append({
+                    "type": "list_running_apps",
+                    "params": {},
+                    "description": "List running apps to find heavy consumers"
+                })
+
+        elif metric == "disk":
+            downloads_path = str(self.brain.actions.user_home / "Downloads")
+            message = f"I can list your Downloads folder to help clean up."
+            self.enqueue_ui(self.add_message, "SOL", message, "system")
+
+            actions.append({
+                "type": "list_directory",
+                "params": {"directory": downloads_path},
+                "description": f"List Downloads folder for cleanup"
+            })
+
+        # Queue the actions for approval
+        if actions and not self.pending_action and not self.pending_actions:
+            self.pending_actions = actions
+            self.pending_action = self.pending_actions.pop(0)
+            self.enqueue_ui(self.show_action_approval, self.pending_action)
+
+    def _check_battery(self, metrics):
+        """Check battery status and alert if low"""
+        if not metrics.get("battery_plugged", True) and metrics.get("battery_low", False):
+            percent = metrics.get("battery_percent", 0)
+            message = f"Battery low: {percent:.0f}%. You might want to plug in soon."
+            self.enqueue_ui(self.add_message, "SOL", message, "system")
+
+    def _log_alert_to_memory(self, metric, metrics, alert_type):
+        """Log alert to SOL's memory system with context"""
+        try:
+            if hasattr(self.brain, 'memory'):
+                value = metrics.get(f"{metric}_percent", 0)
+                trend = metrics.get(f"{metric}_trend", "stable")
+
+                # Create rich context for memory
+                details = {
+                    "metric": metric,
+                    "value": round(value, 1),
+                    "alert_type": alert_type,
+                    "trend": trend,
+                    "top_processes": [p.get('name') for p in metrics.get(f"top_{metric}_processes", [])[:3]]
+                }
+
+                self.brain.memory.log_action(
+                    action_type="system_alert",
+                    action_details=json.dumps(details),
+                    approved=False,  # Alerts don't require approval
+                    result="alerted"
+                )
+
+                # Also add to user memory for pattern recognition
+                self.brain.memory.add_memory_item(
+                    memory_type="system_pattern",
+                    value=f"Alert: {metric} at {value:.0f}% ({alert_type}, trend: {trend})",
+                    source="system_monitor"
+                )
+        except Exception:
+            pass
 
     def animate_glow(self):
         self.glow_phase += 0.15
@@ -1082,6 +1321,8 @@ class SolGUI:
         self.monitoring_config = self.brain.config.get("monitoring", {})
         self.proactive_config = self.brain.config.get("proactive_suggestions", {})
         self.last_alert_time = {}
+        self.alert_levels = {}  # metric -> "warning"/"critical"
+        self.sol_monitor = SolMonitor(self.brain.config)
         self.monitoring_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
         if self.monitoring_config.get("enabled", True):
             self.monitoring_thread.start()

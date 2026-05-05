@@ -6,13 +6,20 @@ Connects LM Studio, memory, and PC actions with safety layer
 import json
 import re
 import threading
+import time
 import shutil
 from pathlib import Path
 
 import requests
+try:
+    import tiktoken
+    _tokenizer = tiktoken.get_encoding("cl100k_base")
+except ImportError:
+    _tokenizer = None
 
 from sol_memory import SolMemory
 from sol_actions import SolActions
+from sol_monitor import SolMonitor
 
 
 class LLMClient:
@@ -499,6 +506,108 @@ class ToolManager:
                 "description": "Get system information"
             }
 
+        if "running apps" in user_lower or "running processes" in user_lower or "list apps" in user_lower:
+            return {
+                "type": "list_running_apps",
+                "params": {},
+                "description": "List running applications"
+            }
+
+        # ===== NEW TOOL INTENTS =====
+        
+        # Web Search
+        if any(phrase in user_lower for phrase in ["search for", "search the web", "look up", "google"]):
+            # Extract the search query
+            patterns = [
+                r"search for\s+(.+)",
+                r"search the web for\s+(.+)",
+                r"look up\s+(.+)",
+                r"google\s+(.+)"
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, user_lower)
+                if match:
+                    query = match.group(1).strip()
+                    # Remove trailing punctuation
+                    query = query.rstrip("?.,!")
+                    return {
+                        "type": "web_search",
+                        "params": {"query": query},
+                        "description": f"Search web for: {query}"
+                    }
+        
+        # Weather
+        if any(word in user_lower for word in ["weather", "temperature", "how hot", "how cold", "forecast"]):
+            location = "auto:ip"
+            # Try to extract location
+            loc_match = re.search(r"weather\s+(?:in|at|for)\s+([\w\s]+)", user_lower)
+            if loc_match:
+                location = loc_match.group(1).strip()
+            return {
+                "type": "get_weather",
+                "params": {"location": location},
+                "description": f"Get weather for {location}"
+            }
+        
+        # News
+        if any(phrase in user_lower for phrase in ["news", "headlines", "what's happening", "what is happening"]):
+            topic = "top"
+            if "tech" in user_lower or "technology" in user_lower:
+                topic = "technology"
+            elif "sports" in user_lower:
+                topic = "sports"
+            return {
+                "type": "get_news_headlines",
+                "params": {"topic": topic},
+                "description": f"Get {topic} news headlines"
+            }
+        
+        # Reminders
+        if "remind me" in user_lower or "set a reminder" in user_lower:
+            # Try to extract time and message
+            time_match = re.search(r"in\s+(\d+)\s+(minute|hour|hr)s?", user_lower)
+            message_match = re.search(r"remind me\s+(?:in\s+\d+\s+(?:minute|hour|hr)s?\s+)?(?:to\s+)?(.+)", user_lower)
+            
+            delay_minutes = None
+            message = None
+            
+            if time_match:
+                amount = int(time_match.group(1))
+                unit = time_match.group(2)
+                delay_minutes = amount if "minute" in unit else amount * 60
+            
+            if message_match:
+                message = message_match.group(1).strip()
+                # Clean up message
+                message = message.rstrip("?.,!")
+            
+            if message and delay_minutes:
+                return {
+                    "type": "set_reminder",
+                    "params": {"message": message, "delay_minutes": delay_minutes},
+                    "description": f"Set reminder: {message} in {delay_minutes} min"
+                }
+            elif message:
+                return {
+                    "type": "set_reminder",
+                    "params": {"message": message, "delay_minutes": 30},  # Default 30 min
+                    "description": f"Set reminder: {message}"
+                }
+        
+        if "list reminders" in user_lower or "show reminders" in user_lower or "my reminders" in user_lower:
+            return {
+                "type": "list_reminders",
+                "params": {},
+                "description": "List all reminders"
+            }
+        
+        if "check reminders" in user_lower or "any reminders" in user_lower:
+            return {
+                "type": "check_reminders",
+                "params": {},
+                "description": "Check due reminders"
+            }
+
         return None
 
     def _describe_action(self, action_type, params):
@@ -526,6 +635,9 @@ class ToolManager:
             url = str(params.get("url", "")).strip()
             if url:
                 return f"Open {url}"
+
+        if action_type == "list_running_apps":
+            return "List running applications"
 
         if action_type == "list_directory":
             directory = str(params.get("directory", "")).strip()
@@ -890,6 +1002,9 @@ class SolCore:
         self.personality_manager = PersonalityManager(self.memory, self.emotion_config)
         self.tool_manager = ToolManager(self.actions, self.memory, self.config)
         self.agent_loop = AgentLoop(self.llm_client, self.tool_manager, self.config, self.personality_manager)
+        self.monitor = SolMonitor(self.config)
+        self._last_proactive_check = 0
+        self._proactive_cooldown = self.config.get("proactive_suggestions", {}).get("cooldown_sec", 600)
         
     def load_config(self, config_path):
         with open(config_path, "r") as f:
@@ -907,9 +1022,126 @@ class SolCore:
         self.personality_manager = PersonalityManager(self.memory, self.emotion_config)
         self.tool_manager = ToolManager(self.actions, self.memory, self.config)
         self.agent_loop = AgentLoop(self.llm_client, self.tool_manager, self.config, self.personality_manager)
-        
+
+    def start_new_session(self, session_name=None):
+        """Start a new chat session, preserving user memory and profile.
+        Returns the new session ID."""
+        return self.memory.start_new_session(session_name)
+
+    def get_sessions(self):
+        """Get all archived sessions"""
+        return self.memory.get_sessions()
+
+    def load_session(self, session_id):
+        """Load a previous session's conversations"""
+        return self.memory.load_session(session_id)
+
     def resolve_memory_paths(self, memory_config):
         return self.memory_manager.resolve_memory_paths(memory_config)
+
+    def _count_tokens(self, text):
+        """Count tokens using tiktoken if available, else rough estimate"""
+        if _tokenizer:
+            return len(_tokenizer.encode(text))
+        return len(text) // 4
+
+    def _smart_trim_history(self, history, context_window, user_message, reserved_tokens=2500):
+        """Smart history trimming with prioritization and summarization.
+
+        1. Uses tiktoken for accurate token counting
+        2. Prioritizes messages by relevance to current query + recency
+        3. Returns (selected_messages, excluded_messages) for summarization
+        """
+        if not history:
+            return history, []
+
+        # Calculate token budget for history
+        system_tokens = self._count_tokens(self.personality)
+        system_tokens += 500  # mood, summary, profile, format prompts
+        response_tokens = self.config.get("lm_studio", {}).get("max_tokens", 600)
+
+        available_tokens = context_window - system_tokens - response_tokens - reserved_tokens
+        if available_tokens < 500:
+            available_tokens = 500
+
+        # Score messages by relevance + recency
+        scored_messages = []
+        user_tokens = set(self._tokenize_for_scoring(user_message.lower()))
+
+        for i, msg in enumerate(history):
+            content = msg.get("content", "")
+            msg_tokens = self._count_tokens(content)
+
+            # Recency score (newer = higher)
+            recency_score = i / len(history) if history else 0
+
+            # Relevance score (token overlap with current message)
+            msg_tokens_lower = set(self._tokenize_for_scoring(content.lower()))
+            overlap = len(user_tokens & msg_tokens_lower)
+            relevance_score = overlap * 2  # Weight relevance higher
+
+            # Role bonus (prioritize user messages slightly)
+            role_bonus = 0.1 if msg.get("role") == "user" else 0
+
+            total_score = recency_score + relevance_score + role_bonus
+            scored_messages.append((total_score, msg_tokens, i, msg))
+
+        # Sort by score (highest first) and fill budget
+        scored_messages.sort(key=lambda x: x[0], reverse=True)
+
+        selected = []
+        excluded = []
+        total_tokens = 0
+
+        for score, tokens, idx, msg in scored_messages:
+            if total_tokens + tokens > available_tokens:
+                excluded.append(msg)
+                continue
+            selected.append((idx, msg))
+            total_tokens += tokens
+
+        # Sort selected by original order
+        selected.sort(key=lambda x: x[0])
+        selected_messages = [msg for _, msg in selected]
+
+        return selected_messages, excluded
+
+    def _tokenize_for_scoring(self, text):
+        """Simple tokenization for relevance scoring"""
+        return [t for t in re.findall(r"[a-z0-9]+", text) if len(t) > 2]
+
+    def _summarize_old_messages(self, old_messages):
+        """Summarize old messages that don't fit in context"""
+        if not old_messages or len(old_messages) < 3:
+            return None
+
+        summary_config = self.config.get("memory", {})
+        if not summary_config.get("summary_enabled", True):
+            return None
+
+        # Build summary prompt
+        conversation_text = "\n".join([
+            f"{msg.get('role', 'unknown')}: {msg.get('content', '')}"
+            for msg in old_messages
+        ])
+
+        # Truncate if too long
+        if len(conversation_text) > 2000:
+            conversation_text = conversation_text[-2000:]
+
+        summary_prompt = (
+            "Summarize this conversation concisely in 2-3 sentences. "
+            "Focus on key topics, decisions, and important context:\n\n"
+            f"{conversation_text}"
+        )
+
+        try:
+            messages = [{"role": "user", "content": summary_prompt}]
+            # LLMClient.chat() returns the content string directly
+            summary = self.llm_client.chat(messages, temperature=0.2, max_tokens=200)
+            return summary if isinstance(summary, str) else None
+        except Exception:
+            return None
 
     def chat(self, user_message):
         self.memory.add_message("user", user_message)
@@ -938,14 +1170,28 @@ class SolCore:
         mood_state = self.personality_manager.update_mood_state(user_message)
         curiosity_active = self.personality_manager.should_trigger_curiosity(user_message, explicit_items)
 
-        history = self.memory.get_conversation_history(limit=10)
+        memory_config = self.config.get("memory", {})
+        lm_config = self.config.get("lm_studio", {})
+        max_history = memory_config.get("max_conversation_history", 60)
+        context_window = lm_config.get("context_window", 8192)
 
         profile = self.memory.get_user_profile()
         summary = self.memory.get_latest_summary()
-        memory_config = self.config.get("memory", {})
         memory_limit = memory_config.get("user_memory_limit", 50)
         user_memory = self.memory.get_user_memory(limit=memory_limit, include_meta=True)
         memory_insight = self.build_memory_insight(user_message, user_memory, explicit_items)
+
+        history = self.memory.get_conversation_history(limit=max_history)
+        history, excluded = self._smart_trim_history(history, context_window, user_message)
+
+        # Summarize excluded messages and add as system context
+        if excluded and len(excluded) >= 3:
+            excluded_summary = self._summarize_old_messages(excluded)
+            if excluded_summary:
+                if summary:
+                    summary = f"{summary}\n\nAdditional context from earlier messages: {excluded_summary}"
+                else:
+                    summary = f"Earlier conversation summary: {excluded_summary}"
 
         try:
             mood_prompt = self.personality_manager.get_mood_prompt(mood_state)
@@ -966,8 +1212,14 @@ class SolCore:
             follow_up = result.get("follow_up", "")
             tool_confidence = result.get("tool_confidence")
 
+            # Check for proactive system alerts
+            proactive_alert = self._check_proactive_alerts()
+            if proactive_alert:
+                response = proactive_alert + "\n\n" + response
+                result["response"] = response
+
             if not action:
-                action = self.detect_action_intent(user_message, response)
+                action = self.tool_manager.detect_action_intent(user_message, response)
 
             self.memory.add_message("assistant", response)
 
@@ -991,6 +1243,48 @@ class SolCore:
                 "follow_up": "",
                 "tool_confidence": None
             }
+
+    def _check_proactive_alerts(self):
+        """Check for system alerts and return a proactive message if needed"""
+        now = time.time()
+        if now - self._last_proactive_check < self._proactive_cooldown:
+            return None
+        
+        self._last_proactive_check = now
+        metrics = self.monitor.get_all_metrics()
+        
+        alert_messages = []
+        
+        # Check CPU
+        if self.monitor.should_escalate("cpu", metrics):
+            alert_messages.append(
+                f"*sigh* Boss, your CPU has been cooking at {metrics['cpu_percent']:.1f}% for a while now. "
+                f"Want me to show you what's hogging it?"
+            )
+        
+        # Check Memory
+        if self.monitor.should_escalate("memory", metrics):
+            alert_messages.append(
+                f"Hey, memory is at {metrics['memory_percent']:.1f}% ({metrics['memory_used_gb']:.1f}GB used). "
+                f"Things might get sluggish. Should I list the top memory hogs?"
+            )
+        
+        # Check Disk
+        if self.monitor.should_escalate("disk", metrics):
+            alert_messages.append(
+                f"Disk space is getting tight - {metrics['disk_percent']:.1f}% full "
+                f"({metrics['disk_free_gb']:.1f}GB free). Might want to clean up."
+            )
+        
+        # Check Battery (if on laptop)
+        if "battery_percent" in metrics and metrics.get("battery_low"):
+            alert_messages.append(
+                f"Battery's at {metrics['battery_percent']}%. You might want to plug in, boss."
+            )
+        
+        if alert_messages:
+            return " ".join(alert_messages)
+        return None
 
     def call_lm_studio(self, messages):
         return self.llm_client.chat(messages)
