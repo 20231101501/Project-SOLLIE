@@ -499,6 +499,13 @@ class ToolManager:
                 "description": "Get system information"
             }
 
+        if "running apps" in user_lower or "running processes" in user_lower or "list apps" in user_lower:
+            return {
+                "type": "list_running_apps",
+                "params": {},
+                "description": "List running applications"
+            }
+
         return None
 
     def _describe_action(self, action_type, params):
@@ -526,6 +533,9 @@ class ToolManager:
             url = str(params.get("url", "")).strip()
             if url:
                 return f"Open {url}"
+
+        if action_type == "list_running_apps":
+            return "List running applications"
 
         if action_type == "list_directory":
             directory = str(params.get("directory", "")).strip()

@@ -32,9 +32,28 @@
   "monitoring": {
     "enabled": true,
     "interval_sec": 30,
-    "cpu_percent": 85,
-    "memory_percent": 85,
-    "disk_percent": 90,
+    "metrics": {
+      "cpu": {
+        "warning": 70,
+        "critical": 85
+      },
+      "memory": {
+        "warning": 75,
+        "critical": 85
+      },
+      "disk": {
+        "warning": 80,
+        "critical": 90
+      },
+      "network": {
+        "enabled": true
+      },
+      "battery": {
+        "enabled": true,
+        "low": 20
+      }
+    },
+    "persistence_sec": 120,
     "quiet_hours": {
       "start": "23:00",
       "end": "07:00"
