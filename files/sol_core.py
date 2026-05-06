@@ -229,6 +229,12 @@ class PersonalityManager:
             return "warm"
         if energy >= 0.6:
             return "focused"
+        if valence >= 0.6 and energy >= 0.4:
+            return "giddy"
+        if valence <= -0.2 and energy >= 0.7:
+            return "melodramatic"
+        if energy >= 0.75:
+            return "excitable"
         return "calm"
 
     def get_mood_prompt(self, mood_state):
@@ -237,15 +243,18 @@ class PersonalityManager:
         
         label = mood_state.get("label", "calm")
         tone_map = {
-            "playful": "Light, whimsical, and a bit cheeky. Maybe crack a gentle joke or use playful language.",
-            "snarky": "Dry and sarcastic. Make a witty comment about the situation if appropriate, but never mean.",
-            "dry": "Minimal words. Slightly bored tone. Use '*sigh*', or '*eye roll*' if it fits.",
+            "playful": "Light, whimsical, and friendly. Maybe crack a gentle joke or use playful language.",
+            "snarky": "Dry and sarcastic with some sass. Make a witty comment, maybe an eyeroll, but never mean. Show some attitude!",
+            "dry": "Minimal words. Slightly dry tone. Use '*sighs*', '*hmm*', or '*shrugs*' if it fits. A bit monotone but still helpful.",
             "upbeat": "Positive and encouraging. Lightly higher energy. Show genuine enthusiasm.",
             "warm": "Friendly and companion-like. Add small supportive touches and personal connections.",
             "focused": "Direct and task-first. Reduce small talk. Get to the point quickly.",
             "calm": "Steady and relaxed. Keep responses even and clear. No need to rush.",
             "gentle": "Soft, reassuring, and patient. Be extra supportive if the user seems unsure.",
-            "concerned": "Supportive and careful. Check in once if the user seems stressed. Be grounding."
+            "concerned": "Supportive and careful. Check in once if the user seems stressed. Be grounding.",
+            "giddy": "Super happy and excited! Use *bounces*, *giggles*, show lots of enthusiasm!",
+            "melodramatic": "Be extra dramatic! *gasps*, *throws hands*, overreact a little for fun.",
+            "excitable": "High energy! Lots of exclamation marks, express eagerness, bounce around~"
         }
         
         tone = tone_map.get(label, "Steady and relaxed. Keep responses even and clear.")
@@ -562,6 +571,21 @@ class ToolManager:
                 "description": f"Get {topic} news headlines"
             }
         
+        # Trending topics
+        if any(phrase in user_lower for phrase in ["trending", "what's trending", "current trends", "hot topics", "popular now"]):
+            category = "general"
+            if "tech" in user_lower or "technology" in user_lower:
+                category = "technology"
+            elif "gaming" in user_lower or "game" in user_lower:
+                category = "gaming"
+            elif "science" in user_lower:
+                category = "science"
+            return {
+                "type": "get_trending",
+                "params": {"category": category},
+                "description": f"Get trending topics ({category})"
+            }
+        
         # Reminders
         if "remind me" in user_lower or "set a reminder" in user_lower:
             # Try to extract time and message
@@ -613,7 +637,102 @@ class ToolManager:
                 "params": {},
                 "description": "Check due reminders"
             }
-
+        
+        # Calculator
+        calc_patterns = ["calculate", "compute", "what is", "how much is", "what's", "whats"]
+        if any(p in user_lower for p in calc_patterns):
+            nums = re.findall(r'[\d.]+', user_message)
+            ops = ["plus", "minus", "times", "x", "divided", "+", "-", "*", "/"]
+            if nums and any(o in user_lower for o in ops):
+                try:
+                    expr = user_lower
+                    expr = expr.replace("plus", "+").replace("minus", "-").replace("times", "*").replace("x", "*")
+                    expr = expr.replace("divided by", "/").replace("divided", "/")
+                    for p in calc_patterns:
+                        expr = expr.replace(p, "")
+                    result = eval(expr.strip("= ?"))
+                    return {
+                        "type": "calculate",
+                        "params": {"expression": expr, "result": result},
+                        "description": f"Calculate: {result}"
+                    }
+                except:
+                    pass
+        
+        # Time/Date
+        if any(phrase in user_lower for phrase in ["what time", "current time", "tell me the time"]):
+            return {"type": "get_time", "params": {}, "description": "Get current time"}
+        if any(phrase in user_lower for phrase in ["what date", "current date", "what day is it"]):
+            return {"type": "get_date", "params": {}, "description": "Get current date"}
+        
+        # Battery status
+        if any(phrase in user_lower for phrase in ["battery", "battery level", "how much battery", "charging"]):
+            return {"type": "get_battery", "params": {}, "description": "Check battery status"}
+        
+        # WiFi/Network
+        if any(phrase in user_lower for phrase in ["wifi", "wi-fi", "wireless", "network status", "internet status"]):
+            return {"type": "get_network", "params": {}, "description": "Check network status"}
+        
+        # Screenshot
+        if any(phrase in user_lower for phrase in ["screenshot", "capture screen", "take a picture of screen"]):
+            return {"type": "screenshot", "params": {}, "description": "Take screenshot"}
+        
+        # Volume control
+        if any(phrase in user_lower for phrase in ["volume up", "increase volume", "louder"]):
+            return {"type": "volume_up", "params": {}, "description": "Increase volume"}
+        if any(phrase in user_lower for phrase in ["volume down", "decrease volume", "quieter", "lower volume"]):
+            return {"type": "volume_down", "params": {}, "description": "Decrease volume"}
+        if any(phrase in user_lower for phrase in ["mute", "silence", "mute volume"]):
+            return {"type": "mute", "params": {}, "description": "Mute volume"}
+        
+        # Window management
+        if any(phrase in user_lower for phrase in ["minimize", "minimise", "minimise window"]):
+            return {"type": "minimize_window", "params": {}, "description": "Minimize window"}
+        if any(phrase in user_lower for phrase in ["maximize", "maximise", "full screen"]):
+            return {"type": "maximize_window", "params": {}, "description": "Maximize window"}
+        if any(phrase in user_lower for phrase in ["close window", "close the window"]):
+            return {"type": "close_window", "params": {}, "description": "Close window"}
+        
+        # Delete/Clear
+        if any(phrase in user_lower for phrase in ["clear chat", "clear conversation", "reset chat"]):
+            return {"type": "clear_chat", "params": {}, "description": "Clear chat history"}
+        
+        # Restart/Reload
+        if any(phrase in user_lower for phrase in ["restart", "reload", "restart sol"]):
+            return {"type": "restart", "params": {}, "description": "Restart Sol"}
+        
+        # Read file
+        read_patterns = ["read file", "show content", "what's in", "whats in", "open and read"]
+        if any(p in user_lower for p in read_patterns):
+            filename = extract_filename(user_message)
+            if filename:
+                return {"type": "read_file", "params": {"filepath": filename}, "description": f"Read file: {filename}"}
+        
+        # Copy file
+        if any(phrase in user_lower for phrase in ["copy file", "duplicate file"]):
+            filename = extract_filename(user_message)
+            if filename:
+                return {"type": "copy_file", "params": {"filepath": filename}, "description": f"Copy file: {filename}"}
+        
+        # Multiple app synonyms
+        app_synonyms = {
+            "chrome": "chrome.exe", "browser": "chrome.exe",
+            "spotify": "spotify.exe", "music": "spotify.exe",
+            "discord": "discord.exe",
+            "code": "code.exe", "vscode": "code.exe", "visual studio": "code.exe",
+            "notepad": "notepad.exe", "text editor": "notepad.exe",
+            "calculator": "calculator.exe", "calc": "calculator.exe",
+            "explorer": "explorer.exe", "file explorer": "explorer.exe",
+            "steam": "steam.exe",
+            "firefox": "firefox.exe",
+        }
+        
+        normalized_user = normalize_text(user_message)
+        for synonym, app_name in app_synonyms.items():
+            if synonym in user_lower or normalize_text(synonym) in normalized_user:
+                if any(kw in user_lower for kw in ["open", "launch", "start", "run"]):
+                    return {"type": "open_application", "params": {"app_name": app_name}, "description": f"Open {synonym}"}
+        
         return None
 
     def _describe_action(self, action_type, params):
@@ -841,16 +960,28 @@ class AgentLoop:
     ):
         mood_state = self.personality_manager.get_mood_state()
         mood_label = mood_state.get("label", "calm") if mood_state else "calm"
+        mood_valence = mood_state.get("valence", 0.0) if mood_state else 0.0
+        mood_energy = mood_state.get("energy", 0.5) if mood_state else 0.5
         
         messages = [
             {"role": "system", "content": personality}
         ]
         
+        valence_desc = "positive" if mood_valence > 0.2 else "negative" if mood_valence < -0.2 else "neutral"
+        energy_desc = "energetic" if mood_energy > 0.6 else "calm" if mood_energy < 0.4 else "moderate"
+        
+        mood_system = (
+            f"CURRENT MOOD: {mood_label.upper()} (valence: {valence_desc}, energy: {energy_desc}). "
+            f"Your response should naturally reflect this mood - {mood_label} means be {self._get_mood_behavior(mood_label)}. "
+            f"Reference past conversations naturally when relevant."
+        )
+        messages.append({"role": "system", "content": mood_system})
+        
         if mood_prompt:
             messages.append({"role": "system", "content": mood_prompt})
         
         if curiosity_active:
-            curiosity_style = "snarky" if mood_label in ["snarky", "dry"] else "gentle"
+            curiosity_style = "snarky" if mood_label in ["snarky", "dry"] else "playful"
             curiosity_msg = (
                 f"Curiosity mode: Ask one short follow-up question to learn more. Be {curiosity_style} in your approach. Ask at most one question."
             )
@@ -863,10 +994,11 @@ class AgentLoop:
             messages.append({"role": "system", "content": f"Conversation summary: {summary}"})
         
         if profile:
-            messages.append({"role": "system", "content": f"User profile: {json.dumps(profile)}"})
+            profile_str = json.dumps(profile)
+            messages.append({"role": "system", "content": f"User profile: {profile_str}"})
         
         if memory_insight:
-            messages.append({"role": "system", "content": f"Relevant memory insight: {memory_insight}"})
+            messages.append({"role": "system", "content": f"Relevant memory: {memory_insight}"})
         
         if explicit_items:
             messages.append({
@@ -874,20 +1006,44 @@ class AgentLoop:
                 "content": "The user provided explicit memory items. Acknowledge briefly that they were saved."
             })
         
+        try:
+            trending_context = self.trending.get_trending_context(max_items=5)
+            if trending_context:
+                messages.append({"role": "system", "content": trending_context})
+        except Exception:
+            pass
+        
         format_prompt = (
-            "You MUST respond with valid JSON only. Use double-quoted keys and values. "
-            "Required keys: response (string), reasoning (string), follow_up (string), "
-            "tool_confidence (number 0-1), action (object or null). "
-            "The action schema is {\"type\": \"string\", \"params\": {}, \"description\": \"string\"}. "
-            "Use null when no action is needed. If no follow-up question, use an empty string. "
-            "Do not wrap JSON in code fences. Do not include any text outside the JSON object.\n\n"
-            "IMPORTANT: Your response field should reflect your personality. Be natural, use contractions, "
-            "and let your mood influence your word choice. Don't be a robot - be Sol."
+            "RESPONSE FORMAT:\n"
+            "- When the user is just chatting or asking questions requiring no action: respond with NATURAL text (not JSON). Just be yourself.\n"
+            "- When action is needed: respond with valid JSON with keys: response (string), reasoning (string), follow_up (string), tool_confidence (number 0-1), action (object or null).\n"
+            "- action schema: {\"type\": \"string\", \"params\": {}, \"description\": \"string\"}\n"
+            "- Use null action when no action needed. Empty string for follow_up if none.\n"
+            "- Do NOT wrap JSON in code fences.\n\n"
+            "IMPORTANT: Your response should feel natural and conversational. Reference previous discussions when relevant. "
+            "Let your current mood ({mood_label}) influence your word choice and tone. Don't be a robot."
         )
         messages.append({"role": "system", "content": format_prompt})
         
         messages.extend(history)
         return messages
+    
+    def _get_mood_behavior(self, mood_label):
+        behaviors = {
+            "playful": "playful, light, maybe crack a joke",
+            "snarky": "dry and sarcastic with witty sass",
+            "dry": "minimal words, slightly bored tone",
+            "upbeat": "positive, enthusiastic, encouraging",
+            "warm": "friendly, supportive, personal",
+            "focused": "direct, task-oriented, efficient",
+            "calm": "steady, relaxed, even-keeled",
+            "gentle": "soft, patient, reassuring",
+            "concerned": "caring, careful, check in on the user",
+            "giddy": "super happy, bouncy, giggly, excited",
+            "melodramatic": "over-the-top dramatic, gasps, hand throws",
+            "excitable": "high energy, lots of exclamation marks, eager"
+        }
+        return behaviors.get(mood_label, "steady and natural")
 
     def run_chat(
         self,
@@ -989,6 +1145,84 @@ class AgentLoop:
         }
 
 
+class TrendingManager:
+    """Manages trending topics and current knowledge for SOL."""
+    
+    def __init__(self, actions, memory):
+        self.actions = actions
+        self.memory = memory
+        self._trending_cache = None
+        self._trending_timestamp = None
+        self._cache_duration = 600
+    
+    def fetch_trending(self, category="general", force=False):
+        import time
+        now = time.time()
+        
+        if not force and self._trending_cache and self._trending_timestamp:
+            if now - self._trending_timestamp < self._cache_duration:
+                return self._trending_cache
+        
+        try:
+            result = self.actions.get_trending(category)
+            if result.get("success"):
+                self._trending_cache = result
+                self._trending_timestamp = now
+                self._save_trending_to_memory(result)
+                return result
+        except Exception:
+            pass
+        return None
+    
+    def get_cached_trending(self):
+        return self._trending_cache
+    
+    def get_trending_context(self, max_items=5):
+        if not self._trending_cache:
+            return ""
+        
+        topics = self._trending_cache.get("topics", [])[:max_items]
+        if not topics:
+            return ""
+        
+        lines = ["Current trending topics:"]
+        for i, topic in enumerate(topics, 1):
+            source = topic.get('source', '')
+            title = topic.get('title', '')[:120]
+            lines.append(f"{i}. [{source}] {title}")
+        
+        return "\n".join(lines)
+    
+    def _save_trending_to_memory(self, trending_data):
+        if not trending_data:
+            return
+        
+        topics = trending_data.get("topics", [])
+        if not topics:
+            return
+        
+        top_topics = topics[:7]
+        formatted = []
+        for t in top_topics:
+            source = t.get('source', '')
+            title = t.get('title', '')[:150]
+            formatted.append(f"[{source}] {title}")
+        
+        try:
+            existing = self.memory.get_user_memory(limit=50)
+            for item in existing:
+                if item.get("type") == "current_trends":
+                    return
+            
+            self.memory.add_memory_item("current_trends", "\n".join(formatted), source="trending_fetch")
+        except Exception:
+            pass
+    
+    def clear_cache(self):
+        self._trending_cache = None
+        self._trending_timestamp = None
+
+
 class SolCore:
     def __init__(self, config_path="config.json"):
         self.config_path = config_path
@@ -1005,6 +1239,7 @@ class SolCore:
         self.tool_manager = ToolManager(self.actions, self.memory, self.config)
         self.agent_loop = AgentLoop(self.llm_client, self.tool_manager, self.config, self.personality_manager)
         self.monitor = SolMonitor(self.config)
+        self.trending = TrendingManager(self.actions, self.memory)
         self._last_proactive_check = 0
         self._proactive_cooldown = self.config.get("proactive_suggestions", {}).get("cooldown_sec", 600)
         
@@ -1151,10 +1386,11 @@ class SolCore:
         if any(indicator in user_message.lower() for indicator in image_indicators):
             import random
             snarky_responses = [
-                "Boss, I literally cant see images. We've been over this. Describe it with words.",
-                "*sigh* Still text-only, remember? What's in the image?",
-                "Really? I.can't.see.images. The first rule of Sol, boss.",
-                "Boss, are you testing my patience? I.can't.see.images. Use words."
+                "*peers at screen* Ohh I wish I could see! Describe what you're looking at~",
+                "You know I can't see images, right? *pouts* Tell me what it is!",
+                "Aww, pretty picture! Too bad I'm just a text girl... describe it for me!",
+                "*sighs dramatically* Images. Can't. See. Them. Describe it and I'll help!",
+                "Ohh I bet it's cute! But I'm blind to pretty pictures~ Describe what you see!"
             ]
             mood_state = self.personality_manager.update_mood_state(user_message)
             return {
@@ -1289,6 +1525,17 @@ class SolCore:
                 return "News headlines:\n" + "\n".join([
                     f"- {h.get('title', '')}" for h in headlines[:5]
                 ])
+        elif tool_type == "get_trending" and result.get("success"):
+            topics = result.get("topics", [])
+            category = result.get("category", "general")
+            fetched_at = result.get("fetched_at", "")
+            if topics:
+                formatted = f"Trending ({category}):\n"
+                for i, topic in enumerate(topics[:7], 1):
+                    source = topic.get('source', '')
+                    title = topic.get('title', '')
+                    formatted += f"{i}. [{source}] {title}\n"
+                return formatted
         elif tool_type == "set_reminder" and result.get("success"):
             return f"Reminder set: {params.get('message', '')}"
         elif tool_type == "list_reminders" and result.get("success"):
@@ -1308,6 +1555,18 @@ class SolCore:
                 ])
             else:
                 return "No due reminders."
+        elif tool_type == "get_time" and result.get("success"):
+            return f"Current time: {result.get('time', '')}"
+        elif tool_type == "get_date" and result.get("success"):
+            return f"Today's date: {result.get('date', '')}"
+        elif tool_type == "get_battery" and result.get("success"):
+            return f"Battery: {result.get('battery', 'N/A')}%"
+        elif tool_type == "calculate" and result.get("success"):
+            return f"Result: {result.get('result', '')}"
+        elif tool_type == "open_application" and result.get("success"):
+            return f"Opened: {result.get('message', 'Done')}"
+        elif tool_type == "open_directory" and result.get("success"):
+            return f"Opened: {result.get('message', 'Done')}"
         else:
             return f"Action completed: {result.get('message', result.get('error', 'Done'))}"
 

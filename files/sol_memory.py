@@ -218,6 +218,12 @@ class SolMemory:
                 "action_taken": action_taken
             }
             self._store["conversations"].append(entry)
+            
+            # Auto-trim if conversation history exceeds 100 messages
+            conversations = self._store.get("conversations", [])
+            if len(conversations) > 100:
+                self._store["conversations"] = conversations[-80:]
+            
             self._save_store()
 
     def get_conversation_history(self, limit=50):
@@ -536,6 +542,12 @@ class SolMemory:
                 }
                 self._store.setdefault("sessions", []).append(session_data)
 
+            # Cleanup old sessions to prevent unbounded growth
+            sessions = list(self._store.get("sessions", []))
+            if len(sessions) > 10:
+                sessions.sort(key=lambda s: s.get("timestamp", ""), reverse=True)
+                self._store["sessions"] = sessions[:10]
+
             # Clear conversation history but keep user_memory and profile
             self._store["conversations"] = []
             self._store["next_ids"]["conversation"] = 1
@@ -558,3 +570,20 @@ class SolMemory:
                 self._save_store()
                 return True
             return False
+
+    def cleanup_old_sessions(self, keep_last=10):
+        """Remove old sessions, keeping only the most recent ones"""
+        with self._lock:
+            sessions = list(self._store.get("sessions", []))
+            if len(sessions) <= keep_last:
+                return 0
+            
+            sessions.sort(key=lambda s: s.get("timestamp", ""), reverse=True)
+            kept_sessions = sessions[:keep_last]
+            removed_count = len(sessions) - len(kept_sessions)
+            
+            self._store["sessions"] = kept_sessions
+            if removed_count > 0:
+                self._save_store()
+            
+            return removed_count
