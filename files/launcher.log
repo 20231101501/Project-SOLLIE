@@ -78,3 +78,96 @@ KeyError: 'accent_alt_hover'
                 ~~~~~~^^^^^^^^^^^^^^^^^^^^
 KeyError: 'accent_alt_hover'
 
+[2026-05-06 18:25:50] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 119, in main
+    app = SolGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 164, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 176, in setup_ui
+    sidebar = self._build_sidebar(main)
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 180, in _build_sidebar
+    sidebar = ctk.CTkFrame(
+        parent,
+    ...<4 lines>...
+        border_color=COLORS["border"]
+    )
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\ctk_frame.py", line 65, in __init__
+    self._draw(no_color_updates=True)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\ctk_frame.py", line 113, in _draw
+    self._apply_widget_scaling(self._border_width),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\scaling\scaling_base_class.py", line 62, in _apply_widget_scaling
+    return value * self.__widget_scaling
+           ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+TypeError: can't multiply sequence by non-int of type 'float'
+
+[2026-05-06 18:26:02] Traceback (most recent call last):
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\\Users\\My PC\\Documents\\GitHub\\Project-SOLLIE\\files\\sol_launcher.py", line 119, in main
+    app = SolGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 164, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 176, in setup_ui
+    sidebar = self._build_sidebar(main)
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 180, in _build_sidebar
+    sidebar = ctk.CTkFrame(
+        parent,
+    ...<4 lines>...
+        border_color=COLORS["border"]
+    )
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\ctk_frame.py", line 65, in __init__
+    self._draw(no_color_updates=True)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\ctk_frame.py", line 113, in _draw
+    self._apply_widget_scaling(self._border_width),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\scaling\scaling_base_class.py", line 62, in _apply_widget_scaling
+    return value * self.__widget_scaling
+           ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+TypeError: can't multiply sequence by non-int of type 'float'
+
+[2026-05-06 18:26:13] Traceback (most recent call last):
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_launcher.py", line 119, in main
+    app = SolGUI()
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 164, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 176, in setup_ui
+    sidebar = self._build_sidebar(main)
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_gui.py", line 180, in _build_sidebar
+    sidebar = ctk.CTkFrame(
+        parent,
+    ...<4 lines>...
+        border_color=COLORS["border"]
+    )
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\ctk_frame.py", line 65, in __init__
+    self._draw(no_color_updates=True)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\ctk_frame.py", line 113, in _draw
+    self._apply_widget_scaling(self._border_width),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\My PC\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter\windows\widgets\scaling\scaling_base_class.py", line 62, in _apply_widget_scaling
+    return value * self.__widget_scaling
+           ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+TypeError: can't multiply sequence by non-int of type 'float'
+
+[2026-05-06 18:26:30] Traceback (most recent call last):
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_launcher.py", line 131, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\My PC\Documents\GitHub\Project-SOLLIE\files\sol_launcher.py", line 126, in main
+    app.run()
+    ^^^^^^^
+AttributeError: 'SolGUI' object has no attribute 'run'
+

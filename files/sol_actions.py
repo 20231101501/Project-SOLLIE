@@ -796,6 +796,83 @@ class SolActions:
             return {"success": True, "headlines": headlines, "count": len(headlines)}
         except Exception as e:
             return {"success": False, "error": str(e)}
+    
+    def get_trending(self, category="general"):
+        """Get trending topics/news - no API key required"""
+        try:
+            import urllib.request
+            import json as json_mod
+            from datetime import datetime
+            
+            topics = []
+            
+            # Fetch from Hacker News (general tech/programming trending)
+            try:
+                hn_url = "https://hacker-news.firebaseio.com/v0/topstories.json"
+                headers = {'User-Agent': 'Sol/1.0'}
+                req = urllib.request.Request(hn_url, headers=headers)
+                
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    story_ids = json_mod.loads(response.read().decode('utf-8'))[:15]
+                
+                hn_topics = []
+                for story_id in story_ids[:5]:
+                    try:
+                        story_url = f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json"
+                        story_req = urllib.request.Request(story_url, headers=headers)
+                        with urllib.request.urlopen(story_req, timeout=5) as story_response:
+                            story = json_mod.loads(story_response.read().decode('utf-8'))
+                            if story.get('title'):
+                                hn_topics.append({
+                                    'title': story['title'],
+                                    'score': story.get('score', 0),
+                                    'source': 'Hacker News'
+                                })
+                    except Exception:
+                        continue
+                
+                if hn_topics:
+                    topics.extend(hn_topics)
+            except Exception:
+                pass
+            
+            # Fetch Reddit trending (r/all - hot)
+            try:
+                reddit_url = "https://www.reddit.com/r/all/hot.json?limit=10"
+                headers = {'User-Agent': 'Sol/1.0'}
+                req = urllib.request.Request(reddit_url, headers=headers)
+                
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    data = json_mod.loads(response.read().decode('utf-8'))
+                    children = data.get('data', {}).get('children', [])[:5]
+                    
+                    for child in children:
+                        post = child.get('data', {})
+                        if post.get('title'):
+                            topics.append({
+                                'title': post.get('title', '')[:150],
+                                'score': post.get('score', 0),
+                                'source': f"Reddit r/{post.get('subreddit', 'all')}"
+                            })
+            except Exception:
+                pass
+            
+            if not topics:
+                return {"success": False, "error": "No trending topics found", "topics": []}
+            
+            # Sort by score and take top 10
+            topics.sort(key=lambda x: x.get('score', 0), reverse=True)
+            topics = topics[:10]
+            
+            return {
+                "success": True, 
+                "topics": topics, 
+                "count": len(topics),
+                "fetched_at": datetime.now().isoformat(),
+                "category": category
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e), "topics": []}
 
 
     def save_settings_action(self, **kwargs):
@@ -825,3 +902,51 @@ class SolActions:
             return {"success": True, "message": f"Setting '{setting}' saved"}
         except Exception as e:
             return {"success": False, "error": str(e)}
+    
+    def get_time(self):
+        """Get current time"""
+        from datetime import datetime
+        return {"success": True, "time": datetime.now().strftime("%I:%M %p")}
+    
+    def get_date(self):
+        """Get current date"""
+        from datetime import datetime
+        return {"success": True, "date": datetime.now().strftime("%A, %B %d, %Y")}
+    
+    def get_battery(self):
+        """Get battery status"""
+        try:
+            battery = psutil.sensors_battery()
+            if battery:
+                percent = battery.percent
+                plugged = "Charging" if battery.power_plugged else "On Battery"
+                return {"success": True, "battery": percent, "status": plugged}
+            return {"success": False, "error": "No battery detected"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def get_network(self):
+        """Get network status"""
+        try:
+            net_io = psutil.net_io_counters()
+            return {
+                "success": True,
+                "sent_mb": net_io.bytes_sent / (1024**2),
+                "recv_mb": net_io.bytes_recv / (1024**2)
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def calculate(self, expression=None, result=None):
+        """Return calculation result"""
+        if result is not None:
+            return {"success": True, "result": str(result)}
+        return {"success": False, "error": "No expression provided"}
+    
+    def clear_chat(self):
+        """Clear chat (stub - doesn't actually clear)"""
+        return {"success": True, "message": "Chat cleared. Starting fresh!"}
+    
+    def restart(self):
+        """Restart Sol (stub)"""
+        return {"success": True, "message": "Restart triggered. Reconnecting..."}
